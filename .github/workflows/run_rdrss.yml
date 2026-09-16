@@ -17,16 +17,17 @@ jobs:
       uses: actions/setup-python@v5
       with:
         python-version: '3.10'
-
-    - name: node 20 사용
-      using: 'node20'
-      main: 'main.js'
         
     - name: 의존성 라이브러리 설치
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
+runs:
+    - name: node 20 사용
+      using: 'node20'
+      main: 'main.js'
+      
     - name: RDRSS 초기설정 및 실행
       run: |
         # 1. Real-Debrid 토큰과 RSS 피드를 강제로 config 디렉토리에 미리 생성
