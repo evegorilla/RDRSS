@@ -1,0 +1,45 @@
+name: Run RDRSS Script
+
+on:
+  schedule:
+    - cron: '*/15 * * * *' # 6시간마다 자동 실행
+  workflow_dispatch: # 수동 실행 버튼 활성화
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+    # Node 24를 공식 지원하는 최신 라이브러리로 판올림
+    - name: 저장소 코드 가져오기
+      uses: actions/checkout@v6
+
+    # Node 24를 공식 지원하는 파이썬 설치 라이브러리로 판올림
+    - name: 파이썬(Python) 설치
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+        
+    - name: 의존성 라이브러리 설치
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: RDRSS 초기설정 및 실행
+      run: |
+        # 1. Real-Debrid 토큰과 RSS 피드를 강제로 config 디렉토리에 미리 생성
+        mkdir -p RDRSSconfig
+        
+        # 주입할 rdrss.json 파일을 동적으로 생성
+        echo '{
+          "authToken": "${{ secrets.REAL_DEBRID_TOKEN }}",
+          "rssUrls": [
+            "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss",
+            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"
+          ],
+          "updated": 0
+        }' > ./RDRSSconfig/rdrss.json
+
+        # 2. 준비된 설정을 바탕으로 Real-Debrid 선택 스크립트 실행
+        python RDRSS.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss",
+            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"
