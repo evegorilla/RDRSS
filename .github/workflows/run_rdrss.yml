@@ -38,6 +38,17 @@ jobs:
         # 2. RSS 피드 주소 등록
         python RDRSS.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
         python RDRSS.py --add "https://bt4gprx.com/search?q=韩国&category=movie&page=rss"
-        
+        python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=골%20때리는%20그녀들%20720p-NEXT&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=국산&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=마사지&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=신작&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=VVIP&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=あらいりま&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=新井リマ&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=Arai%20Rima&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=楓カレン&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=Karen%20Kaede&category=movie&page=rss"
+
         # 3. 패치된 코드로 실행하여 Real-Debrid로 전송 시작
         python RDRSS.py
