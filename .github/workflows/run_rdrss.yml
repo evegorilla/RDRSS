@@ -1,0 +1,31 @@
+name: Run RDRSS Script
+
+on:
+  schedule:
+    - cron: '0 */6 * * *' # 6시간마다 자동으로 실행 (원하는 주기로 변경 가능)
+  workflow_dispatch: # Actions 탭에서 수동으로 실행하고 싶을 때 사용
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 저장소 코드 가져오기
+      uses: actions/checkout@v4
+
+    - name: 파이썬(Python) 설치
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.10'
+
+    - name: 의존성 라이브러리 설치
+      run: |
+        python -m pip install --upgrade pip
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: RDRSS 스크립트 실행
+      env:
+        # 2단계에서 설정한 Secret을 환경변수로 주입
+        REAL_DEBRID_API_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }} 
+      run: |
+        python rdrss.py
