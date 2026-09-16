@@ -41,4 +41,5 @@ jobs:
         }' > ./RDRSSconfig/rdrss.json
 
         # 2. 준비된 설정을 바탕으로 Real-Debrid 선택 스크립트 실행
+        python RDRSS.py --token "ODDSZK2J3S7MGAQNTSKM4OEYTY3YIWUWR4UXYVMASBBOSLYKFMNQ"
         python RDRSS.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
