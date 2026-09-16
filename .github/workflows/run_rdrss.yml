@@ -29,3 +29,12 @@ jobs:
         REAL_DEBRID_API_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }} 
       run: |
         python rdrss.py
+    - name: RDRSS 스크립트 실행
+      env:
+        REAL_DEBRID_API_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }} 
+      run: |
+        # 예시 1: config.json을 지정해야 하는 경우
+        python rdrss.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
+        
+        # 만약 옵션을 모른다면 도움말을 출력하게 하여 로그를 확인해볼 수도 있습니다.
+        # python rdrss.py --help
