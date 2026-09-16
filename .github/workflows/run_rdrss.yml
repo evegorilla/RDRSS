@@ -5,20 +5,18 @@ on:
     - cron: '0 */6 * * *' # 6시간마다 자동 실행
   workflow_dispatch: # 수동 실행 버튼 활성화
 
-# 전역(Global) 환경 변수에 Node 20 임시 사용 승인 플래그 지정
-env:
-  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
-
 jobs:
   run-script:
     runs-on: ubuntu-latest
 
     steps:
+    # Node 24를 공식 지원하는 최신 라이브러리로 판올림
     - name: 저장소 코드 가져오기
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
+    # Node 24를 공식 지원하는 파이썬 설치 라이브러리로 판올림
     - name: 파이썬(Python) 설치
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
         
@@ -36,8 +34,8 @@ jobs:
         echo '{
           "authToken": "${{ secrets.REAL_DEBRID_TOKEN }}",
           "rssUrls": [
-            "https://bt4gprx.com",
-            "https://bt4gprx.com"
+            "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss",
+            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"
           ],
           "updated": 0
         }' > ./RDRSSconfig/rdrss.json
