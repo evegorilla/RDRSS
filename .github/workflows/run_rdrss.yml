@@ -2,8 +2,12 @@ name: Run RDRSS Script
 
 on:
   schedule:
-    - cron: '0 */6 * * *'
-  workflow_dispatch:
+    - cron: '0 */6 * * *' # 6시간마다 자동 실행
+  workflow_dispatch: # 수동 실행 버튼 활성화
+
+# 전역(Global) 환경 변수에 Node 20 임시 사용 승인 플래그 지정
+env:
+  ACTIONS_ALLOW_USE_UNSECURE_NODE_VERSION: true
 
 jobs:
   run-script:
@@ -23,22 +27,18 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-runs:
-    - name: node 20 사용
-      using: 'node20'
-      main: 'main.js'
-      
     - name: RDRSS 초기설정 및 실행
       run: |
         # 1. Real-Debrid 토큰과 RSS 피드를 강제로 config 디렉토리에 미리 생성
         mkdir -p RDRSSconfig
         
-        # 만약 secrets에 토큰을 설정했다면 사용할 수 있으나, 
-        # rdrss.py는 처음에 rdrss.py --token "값" 구조로 넣거나 json을 직접 빌드해줘야 합니다.
-        # 안전하게 json 파일을 직접 동적으로 선언해 주는 방식입니다.
+        # 주입할 rdrss.json 파일을 동적으로 생성
         echo '{
           "authToken": "${{ secrets.REAL_DEBRID_TOKEN }}",
-          "rssUrls": ["https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss", "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"],
+          "rssUrls": [
+            "https://bt4gprx.com",
+            "https://bt4gprx.com"
+          ],
           "updated": 0
         }' > ./RDRSSconfig/rdrss.json
 
