@@ -2,8 +2,8 @@ name: Run RDRSS Script 2
 
 on:
   schedule:
-    - cron: '*/15 * * * *' # 15분마다 자동 실행 (참고: GitHub Action 스케줄러 특성상 실제론 20~30분 주기로 실행될 수 있습니다)
-  workflow_dispatch: # 수동 실행 버튼 활성화
+    - cron: '*/15 * * * *'
+  workflow_dispatch: # 수동 실행 버튼
 
 jobs:
   run-script:
@@ -25,21 +25,23 @@ jobs:
 
     - name: RDRSS 초기설정 및 실행
       env:
-        # GitHub Secrets에 등록한 토큰을 안전하게 가상 환경 변수로 가져옵니다
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+        # RDRSS가 무조건 현재 폴더 아래를 데이터 저장소로 인식하도록 강제 지정합니다.
+        XDG_DATA_HOME: ${{ github.workspace }}/.config
+        XDG_CONFIG_HOME: ${{ github.workspace }}/.config
       run: |
-        # 1. RDRSS가 실제 참조하는 홈 디렉토리 하위의 올바른 config 폴더 생성
-        mkdir -p ~/.config/RDRSS
+        # 1. 강제 지정한 경로 하위에 올바른 폴더 생성
+        mkdir -p ${{ github.workspace }}/.config/RDRSS
         
-        # 2. 올바른 경로에 rdrss.json 파일 동적 생성 (Secrets 토큰 주입)
+        # 2. rdrss.json 파일 동적 생성
         echo '{
           "authToken": "'"$RD_SECRET_TOKEN"'",
           "rssUrls": [
-            "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss",
-            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"
+            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss",
+            "https://bt4gprx.com/search?q=골 때리는 그녀들 720p-NEXT&page=rss"
           ],
           "updated": 0
-        }' > ~/.config/RDRSS/rdrss.json
+        }' > ${{ github.workspace }}/.config/RDRSS/rdrss.json
 
-        # 3. 아무 인자도 주지 않고 실행해야 비로소 RSS 피드를 긁어서 Real-Debrid로 전송합니다.
+        # 3. 인자 없이 순수 실행
         python RDRSS.py
