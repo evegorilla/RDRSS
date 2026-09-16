@@ -2,8 +2,8 @@ name: Run RDRSS Script
 
 on:
   schedule:
-    - cron: '0 */6 * * *' # 6시간마다 자동으로 실행 (원하는 주기로 변경 가능)
-  workflow_dispatch: # Actions 탭에서 수동으로 실행하고 싶을 때 사용
+    - cron: '0 */6 * * *'
+  workflow_dispatch:
 
 jobs:
   run-script:
@@ -23,18 +23,19 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: RDRSS 스크립트 실행
-      env:
-        # 2단계에서 설정한 Secret을 환경변수로 주입
-        REAL_DEBRID_API_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }} 
+    - name: RDRSS 초기설정 및 실행
       run: |
-        python rdrss.py
-    - name: RDRSS 스크립트 실행
-      env:
-        REAL_DEBRID_API_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }} 
-      run: |
-        # 예시 1: config.json을 지정해야 하는 경우
-        python rdrss.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
+        # 1. Real-Debrid 토큰과 RSS 피드를 강제로 config 디렉토리에 미리 생성
+        mkdir -p RDRSSconfig
         
-        # 만약 옵션을 모른다면 도움말을 출력하게 하여 로그를 확인해볼 수도 있습니다.
-        # python rdrss.py --help
+        # 만약 secrets에 토큰을 설정했다면 사용할 수 있으나, 
+        # rdrss.py는 처음에 rdrss.py --token "값" 구조로 넣거나 json을 직접 빌드해줘야 합니다.
+        # 안전하게 json 파일을 직접 동적으로 선언해 주는 방식입니다.
+        echo '{
+          "authToken": "${{ secrets.REAL_DEBRID_TOKEN }}",
+          "rssUrls": ["https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss", "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"],
+          "updated": 0
+        }' > ./RDRSSconfig/rdrss.json
+
+        # 2. 준비된 설정을 바탕으로 Real-Debrid 선택 스크립트 실행
+        python rdrss.py --select
