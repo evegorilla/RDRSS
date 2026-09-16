@@ -23,25 +23,16 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: RDRSS 초기설정 및 실행
+    - name: RDRSS 순차적 설정 빌드 및 실행
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
-        # RDRSS가 무조건 현재 폴더 아래를 데이터 저장소로 인식하도록 강제 지정합니다.
-        XDG_DATA_HOME: ${{ github.workspace }}/.config
-        XDG_CONFIG_HOME: ${{ github.workspace }}/.config
       run: |
-        # 1. 강제 지정한 경로 하위에 올바른 폴더 생성
-        mkdir -p ${{ github.workspace }}/.config/RDRSS
+        # 1. RDRSS 공식 명령어를 이용해 Real-Debrid 토큰을 시스템에 안전하게 등록합니다.
+        python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # 2. rdrss.json 파일 동적 생성
-        echo '{
-          "authToken": "'"$RD_SECRET_TOKEN"'",
-          "rssUrls": [
-            "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss",
-            "https://bt4gprx.com/search?q=골 때리는 그녀들 720p-NEXT&page=rss"
-          ],
-          "updated": 0
-        }' > ${{ github.workspace }}/.config/RDRSS/rdrss.json
-
-        # 3. 인자 없이 순수 실행
+        # 2. 수집할 RSS 피드 주소들을 하나씩 시스템에 등록합니다.
+        python RDRSS.py --add "https://bt4gprx.com/search?q=골 때리는 그녀들 720p-NEXT&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst 때리는&page=rss"
+        
+        # 3. 설정 등록이 완벽히 끝난 상태에서 인자 없이 '순수 실행'을 하여 RSS 수집을 시작합니다.
         python RDRSS.py
