@@ -33,54 +33,16 @@ jobs:
 
     - name: 2. 중복 등록 방지 피드 주입 및 수집 구동
       run: |
-        # 한 줄씩 안전하게 결합하여 들여쓰기 오류 가능성을 완벽히 격리 차단합니다.
-        printf 'import os, json\n' > run_rdrss_safe.py
-        printf 'cf = "RDRSSconfig/rdrss.json"\n' >> run_rdrss_safe.py
-        printf 'os.makedirs("RDRSSconfig", exist_ok=True)\n' >> run_rdrss_safe.py
-        printf 'urls = set()\n' >> run_rdrss_safe.py
-        printf 'if os.path.exists(cf):\n' >> run_rdrss_safe.py
-        printf '    try:\n' >> run_rdrss_safe.py
-        printf '        with open(cf, "r", encoding="utf-8") as jf: urls = set(u.strip().lower() for u in json.load(jf).get("rssUrls", []))\n' >> run_rdrss_safe.py
-        printf '    except: pass\n' >> run_rdrss_safe.py
-        printf 'target = "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"\n' >> run_rdrss_safe.py
-        printf 'if target.strip().lower() not in urls: os.system('\''python RDRSS.py --add "{}"'\''.format(target))\n' >> run_rdrss_safe.py
-        printf 'os.system("python RDRSS.py")\n' >> run_rdrss_safe.py
-        
-        # 주입기 프로세스 가동
-        python run_rdrss_safe.py
+        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 빌더를 가동합니다.
+        python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = "https://bt4gprx.com"; os.system(f"python RDRSS.py --add \"{target}\"") if target.strip().lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 이미 등록됨: {target}"); os.system("python RDRSS.py")'
 
     - name: 3. Real-Debrid 클라우드 중복 해시 전수조사 및 강제 청소
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # 전수조사형(?limit=2500) 및 정식 삭제 명세를 담은 무결점 사후 클렌징 가드 빌드
-        # printf 매커니즘을 통해 리눅스 셸 공백 간섭을 무력화시킵니다.
-        printf 'import os, urllib.request, json\n' > rd_cleaner.py
-        printf 'tk = os.environ.get("RD_SECRET_TOKEN", "")\n' >> rd_cleaner.py
-        printf 'if tk:\n' >> rd_cleaner.py
-        printf '    try:\n' >> rd_cleaner.py
-        printf '        req = urllib.request.Request("https://real-debrid.com", headers={"Authorization": "Bearer {}".format(tk)})\n' >> rd_cleaner.py
-        printf '        with urllib.request.urlopen(req) as r: raw = r.read().decode().strip()\n' >> rd_cleaner.py
-        printf '        if raw and not raw.startswith("<"):\n' >> rd_cleaner.py
-        printf '            seen, dups = set(), []\n' >> rd_cleaner.py
-        printf '            for t in json.loads(raw):\n' >> rd_cleaner.py
-        printf '                h, i = t.get("hash", "").lower(), t.get("id", "")\n' >> rd_cleaner.py
-        printf '                if h and i:\n' >> rd_cleaner.py
-        printf '                    if h in seen: dups.append((i, t.get("filename", "Unknown")))\n' >> rd_cleaner.py
-        printf '                    else: seen.add(h)\n' >> rd_cleaner.py
-        printf '            if dups:\n' >> rd_cleaner.py
-        printf '                print("=== [검출 완료] 총 {}개의 중복 내역 포착 ===".format(len(dups)))\n' >> rd_cleaner.py
-        printf '                for i, name in dups:\n' >> rd_cleaner.py
-        printf '                    print("[실시간 원격 제거] {}".format(name))\n' >> rd_cleaner.py
-        printf '                    d_req = urllib.request.Request("https://real-debrid.com{}".format(i), method="DELETE", headers={"Authorization": "Bearer {}".format(tk)})\n' >> rd_cleaner.py
-        printf '                    try:\n' >> rd_cleaner.py
-        printf '                        with urllib.request.urlopen(d_req) as dr: pass\n' >> urllib.request.Request\n' >> rd_cleaner.py
-        printf '                    except: pass\n' >> rd_cleaner.py
-        printf '            else: print("=== [안정] 중복 유입 파일이 없는 깨끗한 상태입니다. ===")\n' >> rd_cleaner.py
-        printf '    exceptException as e: print("에러: {}".format(e))\n' >> rd_cleaner.py
-        
-        # 사후 원격 파괴 프로세서 구동
-        python rd_cleaner.py
+        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 빌더를 가동합니다.
+        # 50개 제한 해제(?limit=2500) 및 정식 엔드포인트를 적용한 실시간 원격 청소기입니다.
+        python -c 'import os, urllib.request, json; tk = os.environ.get("RD_SECRET_TOKEN", ""); (lambda: [None for t in json.loads(urllib.request.urlopen(urllib.request.Request("https://real-debrid.com", headers={"Authorization": f"Bearer {tk}"})).read().decode().strip()) if not t.get("hash", "").lower() in seen and not seen.add(t.get("hash", "").lower()) and print(f"[유지] {t.get(\"filename\", \"Unknown\")}") or (print(f"[실시간 중복 제거] {t.get(\"filename\", \"Unknown\")}") or urllib.request.urlopen(urllib.request.Request(f"https://real-debrid.com{t.get(\"id\", \"\")}", method="DELETE", headers={"Authorization": f"Bearer {tk}"})))])() if tk and not (raw := urllib.request.urlopen(urllib.request.Request("https://real-debrid.com", headers={"Authorization": f"Bearer {tk}"})).read().decode().strip()).startswith("<") and (seen := set()) is not None else print("인증 만료 또는 데이터 공백으로 리턴합니다.")'
 
     - name: 4. RDRSS 상태 보존 커밋
       run: |
