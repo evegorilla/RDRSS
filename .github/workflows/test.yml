@@ -39,20 +39,19 @@ jobs:
         # 1. Real-Debrid 토큰 등록
         python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # 2. RSS 피드 주소 등록
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
-        python RDRSS.py --add "https://bt4gprx.com"
+        # 2. 파이썬 반복문을 이용해 중복 없이 깔끔하게 피드 등록 (원하는 키워드는 여기에만 추가하면 됩니다)
+        python -c "
+        import subprocess, urllib.parse
+        keywords = [
+            'bydda.cc', '韩国', 'h264-f1rst 때리는', '골 때리는 그녀들 720p-NEXT',
+            '국산', '마사지', '신작', 'VVIP', 
+            '아라이 리마', '新井リマ', 'Arai Rima', '枫カレン', 'Karen Kaede'
+        ]
+        for kw in keywords:
+            # 영화/비디오 카테고리로 필터링하여 불필요한 파일 유입 차단
+            url = f'https://bt4gprx.com{urllib.parse.quote(kw)}&category=movie&page=rss'
+            subprocess.run(['python', 'RDRSS.py', '--add', url])
+        "
 
         # 3. 패치된 코드로 실행하여 Real-Debrid로 전송 시작
         python RDRSS.py
