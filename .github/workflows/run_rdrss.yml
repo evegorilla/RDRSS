@@ -36,9 +36,8 @@ jobs:
         # rdrss.json 설정 파일이 없는 최초 실행 환경일 때만 RSS 피드 등록
         if [ ! -d "RDRSSconfig" ] || [ ! -f "RDRSSconfig/rdrss.json" ]; then
           echo "Initial setup: adding feeds..."
-          python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20%EB%95%8C%EB%A6%AC%EB%8A%94&page=rss"
-          
-        fi
+          python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+          fi
 
     - name: 2. RDRSS 기본 실행
       run: |
