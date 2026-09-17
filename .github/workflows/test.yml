@@ -1,13 +1,9 @@
-name: Run RDRSS Script Test
+name: Run RDRSS Script
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '*/15 * * * *'
   workflow_dispatch: # 수동 실행 버튼
-
-# 저장소에 상태 파일을 다시 푸시(Push)할 수 있도록 쓰기 권한을 부여합니다.
-permissions:
-  contents: write
 
 jobs:
   run-script:
@@ -15,10 +11,10 @@ jobs:
 
     steps:
     - name: 저장소 코드 가져오기
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: 파이썬(Python) 설치
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v6
       with:
         python-version: '3.10'
         
@@ -31,7 +27,7 @@ jobs:
       run: |
         # entry.updated_parsed가 None(없음)일 경우 오류가 나지 않도록 파이썬 코드를 한 줄 수정합니다.
         sed -i "s/if (entry.updated_parsed > last_load_date):/if (entry.get('updated_parsed') is None or entry.updated_parsed > last_load_date):/g" RDRSS.py
- 
+
     - name: RDRSS 순차적 설정 빌드 및 실행
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
@@ -39,19 +35,20 @@ jobs:
         # 1. Real-Debrid 토큰 등록
         python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # 2. 유실되었던 /search?q= 주소 구조를 올바르게 수정하여 피드 등록
-        python -c "
-        import subprocess, urllib.parse
-        keywords = [
-            'bydda.cc', '韩国', 'h264-f1rst 때리는', '골 때리는 그녀들 720p-NEXT',
-            '국산', '마사지', '신작', 'VVIP', 
-            '아라이 리마', '新井リマ', 'Arai Rima', '枫カレン', 'Karen Kaede'
-        ]
-        for kw in keywords:
-            # 주소 사이에 유실되었던 /search?q= 구문을 정확하게 다시 채워 넣었습니다.
-            url = f'https://bt4gprx.com{urllib.parse.quote(kw)}&category=movie&page=rss'
-            subprocess.run(['python', 'RDRSS.py', '--add', url])
-        "
+        # 2. RSS 피드 주소 등록
+        python RDRSS.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=韩国&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=골%20때리는%20그녀들%20720p-NEXT&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=국산&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=마사지&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=신작&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=VVIP&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=あらいりま&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=新井リマ&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=Arai%20Rima&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=楓カレン&category=movie&page=rss"
+        python RDRSS.py --add "https://bt4gprx.com/search?q=Karen%20Kaede&category=movie&page=rss"
 
         # 3. 패치된 코드로 실행하여 Real-Debrid로 전송 시작
         python RDRSS.py
