@@ -47,7 +47,7 @@ jobs:
         echo '        with open(config_file, "r", encoding="utf-8") as jf:' >> run_rdrss_safe.py
         echo '            existing_urls = set(url.strip().lower() for url in json.load(jf).get("rssUrls", []))' >> run_rdrss_safe.py
         echo '    except: pass' >> run_rdrss_safe.py
-        echo 'target_feed = "https://bt4gprx.com"' >> run_rdrss_safe.py
+        echo 'target_feed = "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"' >> run_rdrss_safe.py
         echo 'if target_feed.strip().lower() not in existing_urls:' >> run_rdrss_safe.py
         echo '    print(f"[피드 등록] 신규 URL 추가: {target_feed}")' >> run_rdrss_safe.py
         echo '    os.system(f"python RDRSS.py --add \"{target_feed}\"")' >> run_rdrss_safe.py
