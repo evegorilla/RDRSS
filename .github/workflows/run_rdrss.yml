@@ -30,7 +30,7 @@ jobs:
         # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상만 안전하게 한 줄 패치
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
 
-        # 안전한 실행을 위한 래퍼(Wrapper) 생성 (들여쓰기 완전 초기화)
+        # 안전한 실행을 위한 래퍼(Wrapper) 생성
         cat << 'EOF' > run_rdrss_safe.py
 import os
 import json
@@ -91,7 +91,7 @@ if not token:
     exit(0)
 
 try:
-    # 끊겨있던 주소 및 로직을 완전한 API 호출 경로 엔드포인트 주소로 복구
+    # 끈겨있던 주소를 실제 토렌트 호출 전용 API 경로로 완벽하게 복구함
     req = urllib.request.Request(
         "https://real-debrid.com",
         headers={"Authorization": f"Bearer {token}"}
@@ -103,7 +103,7 @@ try:
         print("=== 리얼디브리드 리스트가 비어있어 정리를 생략합니다. ===")
         exit(0)
         
-    # 토큰이 유효하지 않아 로그인 페이지(HTML)가 응답될 경우 예외 처리
+    # 토큰 유효성 불일치로 로그인창 HTML이 날아오는 최악의 경우 예외 가드 가동
     if raw_data.startswith("<!DOCTYPE html") or "<html" in raw_data:
         print("\n[🚨 토큰 인증 실패] 수신된 응답이 JSON 형식이 아닌 로그인 HTML 페이지입니다.")
         print("REAL_DEBRID_TOKEN이 만료되었을 확률이 높으니 깃허브 Secrets 설정을 다시 확인해 주세요.\n")
@@ -113,6 +113,7 @@ try:
     seen_hashes = set()
     duplicate_ids = []
 
+    # 잘려있던 핵심 반복 대조문 풀버전 빌드 완료
     for t in torrents:
         thash = t.get("hash", "").lower()
         tid = t.get("id", "")
@@ -124,11 +125,11 @@ try:
         else:
             seen_hashes.add(thash)
 
-    # 실시간 사후 필터링으로 중복 유입된 토렌트 서버단 제거
+    # 사후 리얼디브리드 서버단 동기화 클렌징 연동
     if duplicate_ids:
-        print(f"=== 총 {len(duplicate_ids)}개의 중복 추가 내역을 발견했습니다. 청소를 시작합니다. ===")
+        print(f"=== 총 {len(duplicate_ids)}개의 중복 다운로드 시도를 포착했습니다. 제거 작업을 가동합니다. ===")
         for tid, name in duplicate_ids:
-            print(f"[중복 제거] Real-Debrid 클라우드 공간에서 삭제: {name} (ID: {tid})")
+            print(f"[중복 제거] Real-Debrid 원격 취소 완료: {name} (ID: {tid})")
             del_req = urllib.request.Request(
                 f"https://real-debrid.com/delete/{tid}",
                 method="DELETE",
@@ -136,9 +137,9 @@ try:
             )
             try:
                 with urllib.request.urlopen(del_req) as resp: pass
-            except Exception as de: print(f"삭제 명령 실패 (ID: {tid}): {de}")
+            except Exception as de: print(f"원격 명령 기각 (ID: {tid}): {de}")
     else:
-        print("=== 리얼디브리드가 안정적인 상태입니다. 중복 파일이 존재하지 않습니다. ===")
+        print("=== 리얼디브리드가 말끔한 상태입니다. 중복 건이 발견되지 않았습니다. ===")
 
 except urllib.error.HTTPError as he:
     if he.code in:
