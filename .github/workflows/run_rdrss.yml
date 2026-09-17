@@ -23,22 +23,61 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 1. RDRSS 피드 연동 및 수집 가동
+    - name: 1. RDRSS 피드 연동 및 수집 가동 (JSON 중복 방지 포함)
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
         # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상만 안전하게 한 줄 패치
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
 
-        # 토큰 등록 (매 실행마다 초기화 필수)
-        python RDRSS.py --token "$RD_SECRET_TOKEN"
-        
-        # 'Missing RSS url' 에러를 막기 위해 구동할 때마다 무조건 타겟 주소들을 재주입합니다.
-        python RDRSS.py --add "https://bt4gprx.com/search?q=골%20때리는%20그녀들%20720p-NEXT&page=rss"
-        
+        # JSON에 URL이 계속 늘어나는 현상을 막기 위해 파이썬으로 사전 필터링 후 등록합니다.
+        cat << 'EOF' > run_rdrss_safe.py
+        import os
+        import json
 
-        # 최종 스캔 가동 (중복 전송 유발 구간)
-        python RDRSS.py
+        config_file = "RDRSSconfig/rdrss.json"
+        os.makedirs("RDRSSconfig", exist_ok=True)
+        token = os.environ.get("RD_SECRET_TOKEN", "")
+
+        # 1) 토큰 무조건 등록
+        if token:
+            os.system(f'python RDRSS.py --token "{token}"')
+
+        # 2) rdrss.json 내부의 기존 등록 URL 목록 파싱
+        existing_urls = set()
+        if os.path.exists(config_file):
+            try:
+                with open(config_file, "r", encoding="utf-8") as jf:
+                    config_data = json.load(jf)
+                    urls_list = config_data.get("rssUrls", [])
+                    existing_urls = set(url.strip().lower() for url in urls_list)
+            except Exception as e:
+                print(f"[경고] rdrss.json 읽기 실패 (새로 빌드함): {e}")
+
+        # 3) 추가할 피드 리스트
+        target_feeds = [
+            "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+        ]
+
+        # 4) 중복되지 않은 신규 URL만 선별 등록
+        added_count = 0
+        for url in target_feeds:
+            if url.strip().lower() not in existing_urls:
+                print(f"[피드 등록] 신규 URL 추가 실행: {url}")
+                os.system(f'python RDRSS.py --add "{url}"')
+                added_count += 1
+            else:
+                print(f"[피드 패스] 이미 json 파일에 존재하는 URL입니다: {url}")
+
+        # rdrss.json에 등록된 URL이 아예 없거나 최초 빌드인 경우 예외 강제 방지용 더미 추가
+        if not existing_urls and added_count == 0:
+            os.system(f'python RDRSS.py --add "{target_feeds[0]}"')
+
+        # 5) 최종 스캔 구동
+        os.system("python RDRSS.py")
+        EOF
+
+        python run_rdrss_safe.py
 
     - name: 2. Real-Debrid 서버단 중복 결함 강제 청소 (안전 필터)
       env:
@@ -48,6 +87,7 @@ jobs:
         import os
         import urllib.request
         import json
+        import urllib.error
 
         token = os.environ.get("RD_SECRET_TOKEN", "")
         if not token:
@@ -63,7 +103,7 @@ jobs:
             with urllib.request.urlopen(req) as response:
                 raw_data = response.read().decode().strip()
                 
-            # 데이터가 비어있거나 응답 코드가 유실되었을 때의 JSON 파싱 안전장치
+            # 데이터가 비어있을 때 파싱 에러 방지
             if not raw_data:
                 print("=== 리얼디브리드 클라우드가 비어있습니다. 중복 체크를 생략합니다. ===")
                 exit(0)
@@ -106,6 +146,10 @@ jobs:
             else:
                 print("=== 리얼디브리드가 안정적인 상태입니다. 중복 파일이 없습니다. ===")
 
+        except urllib.error.HTTPError as he:
+            print(f"[HTTP 에러 파악]: 응답 코드 {he.code}가 반환되었습니다. API 토큰 만료 여부나 서버 상태를 확인해 보세요.")
+        except json.JSONDecodeError as je:
+            print(f"[JSON 파싱 차단]: 수신된 데이터 형식이 비정상적이거나 완전한 문자열이 아닙니다. 원문: {raw_data if 'raw_data' in locals() else '데이터 없음'}")
         except Exception as e:
             print(f"Real-Debrid API 동기화 가드 작동 중 예외 포착: {e}")
         EOF
