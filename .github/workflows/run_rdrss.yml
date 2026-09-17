@@ -33,33 +33,27 @@ jobs:
         import json
 
         history_file = "RDRSSconfig/history_magnets.txt"
-        feeds_file = "RDRSSconfig/feeds.json"
+        config_file = "RDRSSconfig/rdrss.json"
         os.makedirs("RDRSSconfig", exist_ok=True)
 
-        # 1) 토큰 무조건 먼저 등록 (RDRSS 기본 초기화)
+        # 1. Real-Debrid 토큰 초기화 등록
         token = os.environ.get("RD_SECRET_TOKEN", "")
         if token:
             os.system(f'python RDRSS.py --token "{token}"')
 
-        # 2) JSON에 이미 존재하는 URL 목록 미리 확인 (중복 추가 방지)
+        # 2. rdrss.json 내부의 기존 등록 URL 목록 파싱
         existing_urls = set()
-        if os.path.exists(feeds_file):
+        if os.path.exists(config_file):
             try:
-                with open(feeds_file, "r", encoding="utf-8") as jf:
-                    feeds_data = json.load(jf)
-                    # 스크립트 내부 구조상 리스트 형태이거나 딕셔너리 형태일 수 있으므로 안전하게 파싱
-                    if isinstance(feeds_data, list):
-                        for item in feeds_data:
-                            if isinstance(item, dict) and "url" in item:
-                                existing_urls.add(item["url"].strip().lower())
-                    elif isinstance(feeds_data, dict):
-                        for k, v in feeds_data.items():
-                            if isinstance(v, dict) and "url" in v:
-                                existing_urls.add(v["url"].strip().lower())
+                with open(config_file, "r", encoding="utf-8") as jf:
+                    config_data = json.load(jf)
+                    # rdrss.json의 실제 키값 구조인 rssUrls를 가져옵니다.
+                    urls_list = config_data.get("rssUrls", [])
+                    existing_urls = set(url.strip().lower() for url in urls_list)
             except Exception as e:
-                print(f"[경고] 기존 feeds.json 읽기 실패 (새로 작성함): {e}")
+                print(f"[경고] rdrss.json 읽기 실패: {e}")
 
-        # 3) 추가할 피드 리스트 정의
+        # 3. 추가 타겟 피드 리스트
         target_feeds = [
             "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss",
             "https://bt4gprx.com/search?q=韩国&category=movie&page=rss",
@@ -76,62 +70,67 @@ jobs:
             "https://bt4gprx.com/search?q=Karen%20Kaede&category=movie&page=rss"
         ]
 
-        # 4) 존재하지 않는 주소만 골라서 안전하게 --add 실행
+        # 없는 URL만 골라 추가 진행
         for url in target_feeds:
             if url.strip().lower() not in existing_urls:
-                print(f"[피드 등록] 신규 URL 추가: {url}")
+                print(f"[피드 등록] 신규 URL 추가 실행: {url}")
                 os.system(f'python RDRSS.py --add "{url}"')
-            else:
-                print(f"[피드 패스] 이미 JSON에 존재하는 URL입니다: {url}")
 
-        # 5) 마그넷 중복 차단 기록 로드
+        # 4. 다운로드 완료된 마그넷 세트 불러오기
         downloaded = set()
         if os.path.exists(history_file):
             with open(history_file, "r", encoding="utf-8") as hf:
                 downloaded = set(line.strip().lower() for line in hf if line.strip())
 
-        # 6) 원본 RDRSS.py 소스코드 가로채기 및 패치
+        # 5. RDRSS.py 핵심 로직 변조 소스 빌드
         with open("RDRSS.py", "r", encoding="utf-8") as f:
             source = f.read()
 
-        # [패치 1] BT4G 날짜 에러 방지 (TypeError 대책)
-        old_date_check = "if (entry.updated_parsed > last_load_date):"
-        new_date_check = "if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):"
-        source = source.replace(old_date_check, new_date_check)
+        # [패치 1] BT4G 특유의 날짜 없음(TypeError) 대책 마련
+        source = source.replace(
+            "if (entry.updated_parsed > last_load_date):",
+            "if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):"
+        )
 
-        # [패치 2] 마그넷 중복 전송 방지 로직 주입
-        replacement = """for title, magnet in magnets:
+        # [패치 2] 마그넷 수집문 가로채기 방식 고도화
+        # 원본 소스코드의 가독성 및 들여쓰기 공백 편차 방지를 위해 유연하게 감지 처리합니다.
+        replacement_code = """for title, magnet in magnets:
             magnet_clean = magnet.strip().lower()
             if magnet_clean in downloaded_magnets_global:
-                print(f"[필터링] 중복 마그넷 제외 완료: {title}")
+                print(f"[필터링 완료] 무한 중복 스킵: {title}")
                 continue
             downloaded_magnets_global.add(magnet_clean)
             with open("RDRSSconfig/history_magnets.txt", "a", encoding="utf-8") as hf:
                 hf.write(magnet_clean + "\\n")"""
 
+        if "for title, magnet in magnets:" in source:
+            source = source.replace("for title, magnet in magnets:", replacement_code)
+        else:
+            # 공백 들여쓰기가 스크립트에 따라 다를 경우 대안 검출
+            source = source.replace("for title,magnet in magnets:", replacement_code)
+
         source = "downloaded_magnets_global = " + repr(downloaded) + "\n" + source
-        source = source.replace("for title, magnet in magnets:", replacement)
 
         with open("RDRSS_patched.py", "w", encoding="utf-8") as f:
             f.write(source)
 
-        print("=== 중복 필터링을 적용한 RDRSS 스캔을 실행합니다 ===")
+        print("=== 중복 필터링 통합 패치 RDRSS 구동 시작 ===")
         exit_code = os.system("python RDRSS_patched.py")
         if exit_code != 0:
             sys.exit(exit_code)
         EOF
         
-        # 통합 제어기 구동
         python run_filter.py
 
-    - name: 3. RDRSS 데이터 및 동기화 상태 파일 깃허브 커밋
+    - name: 3. RDRSS 설정 데이터 및 마그넷 이력 파일 깃허브 커밋
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@://github.com"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
+        # 새로 추적되거나 변경된 RDRSSconfig 하위 폴더의 모든 데이터를 추가
         git add RDRSSconfig/
         
         if ! git diff --staged --quiet; then
-          git commit -m "chore: Synchronize RDRSS feed updates and history [skip ci]"
+          git commit -m "chore: Synchronize configuration and magnet history logs [skip ci]"
           git push
         fi
