@@ -42,7 +42,7 @@ jobs:
         echo '    try:' >> run_rdrss_safe.py
         echo '        with open(cf, "r", encoding="utf-8") as f: urls = set(u.strip().lower() for u in json.load(f).get("rssUrls", []))' >> run_rdrss_safe.py
         echo '    except: pass' >> run_rdrss_safe.py
-        echo 'target = "https://bt4gprx.com"' >> run_rdrss_safe.py
+        echo 'target = "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"' >> run_rdrss_safe.py
         echo 'if target.strip().lower() not in urls: os.system("python RDRSS.py --add \"{}\"".format(target))' >> run_rdrss_safe.py
         echo 'os.system("python RDRSS.py")' >> run_rdrss_safe.py
         
