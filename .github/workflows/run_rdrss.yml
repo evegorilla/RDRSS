@@ -2,7 +2,7 @@ name: Run RDRSS Script
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/20 * * * *'
   workflow_dispatch: # 수동 실행 버튼
 
 jobs:
@@ -52,3 +52,20 @@ jobs:
 
         # 3. 패치된 코드로 실행하여 Real-Debrid로 전송 시작
         python RDRSS.py
+
+
+    - name: RDRSS 내부 설정 및 동기화 상태 파일 커밋 (중복 방지)
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        
+        # 스크립트가 임시로 생성한 RDRSSconfig 폴더 전체를 스테이징합니다.
+        git add RDRSSconfig/
+        
+        # 날짜 기록 파일에 변경 사항이 생겼을 때만 커밋 및 푸시
+        if ! git diff --staged --quiet; then
+          git commit -m "chore: Update RDRSS feed dates [skip ci]"
+          git push
+        else
+          echo "새로 추가된 RSS 피드가 없어 상태를 유지합니다."
+        fi
