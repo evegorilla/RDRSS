@@ -23,60 +23,16 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: RDRSS 무한 중복 전송 방지 핵패치 (마그넷 해시 필터링)
-      run: |
-        # 1. BT4G의 부실한 날짜 데이터(None) 오류 우회 패치
-        sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is not None and entry.updated_parsed > last_load_date:/g" RDRSS.py
-
-        # 2. 파이썬 스크립트 내부 주입 방식의 마그넷 중복 링크 필터 빌드
-        # 이미 처리한 마그넷 주소는 history_magnets.txt에 영구 저장하여 다중 필터링합니다.
-        python - << 'EOF'
-        with open("RDRSS.py", "r", encoding="utf-8") as f:
-            code = f.read()
-
-        # 중복 마그넷 체크용 커스텀 파이썬 로직 정의
-        injection_code = """
-    # --- 중복 차단 커스텀 로직 시작 ---
-    import os
-    history_file = "RDRSSconfig/history_magnets.txt"
-    os.makedirs("RDRSSconfig", exist_ok=True)
-    if not os.path.exists(history_file):
-        with open(history_file, "w") as hf: pass
-    with open(history_file, "r") as hf:
-        downloaded_magnets = set(hf.read().splitlines())
-    
-    # 중복 주소면 Real-Debrid 추가 스킵
-    if magnet in downloaded_magnets:
-        print(f"Skipping duplicate magnet: {title}")
-        continue
-        
-    # 신규 주소면 기록 추가
-    with open(history_file, "a") as hf:
-        hf.write(magnet + "\\n")
-    # --- 중복 차단 커스텀 로직 끝 ---
-        """
-
-        # 실제 마그넷 주소를 Real-Debrid API로 쏘는 반복문 초입부를 찾아 로직을 강제 주입합니다.
-        target_str = "for title, magnet in magnets:"
-        if target_str in code and "history_magnets.txt" not in code:
-            code = code.replace(target_str, target_str + injection_code)
-            with open("RDRSS.py", "w", encoding="utf-8") as f:
-                f.write(code)
-            print("Successfully injected Magnet Hash Filter into RDRSS.py")
-        else:
-            print("Filter already injected or target pattern not found.")
-        EOF
-
-    - name: RDRSS 순차적 설정 빌드 및 실행
+    - name: 1. RDRSS 기본 피드 설정 생성 (최초 1회만)
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # 1. Real-Debrid 토큰 등록
+        # 토큰 등록
         python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # 2. 피드 데이터가 담긴 JSON이 없을 때만 최초 1회 RSS 주소 등록
+        # 설정 파일이 존재하지 않는 최초 구동 시에만 피드들을 배치 등록합니다.
         if [ ! -d "RDRSSconfig" ] || [ ! -f "RDRSSconfig/feeds.json" ]; then
-          echo "최초 실행: RSS 피드 주소들을 등록합니다."
+          echo "Initial setup: adding feeds..."
           python RDRSS.py --add "https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss"
           python RDRSS.py --add "https://bt4gprx.com/search?q=韩国&category=movie&page=rss"
           python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
@@ -90,23 +46,65 @@ jobs:
           python RDRSS.py --add "https://bt4gprx.com/search?q=Arai%20Rima&category=movie&page=rss"
           python RDRSS.py --add "https://bt4gprx.com/search?q=楓カレン&category=movie&page=rss"
           python RDRSS.py --add "https://bt4gprx.com/search?q=Karen%20Kaede&category=movie&page=rss"
-        else
-          echo "기존에 등록된 RSS 피드 구성을 재사용하여 업데이트를 스캔합니다."
         fi
 
-        # 3. 강화 패치된 상태로 전송 스크립트 실행
-        python RDRSS.py
+    - name: 2. 중복 없는 마그넷 필터링 및 리얼디브리드 전송 제어 실행
+      run: |
+        # 외부에서 제어 파일을 독립적으로 생성하여 오류 가능성을 근본적으로 제거합니다.
+        cat << 'EOF' > run_filter.py
+        import os
+        import re
+        import sys
 
-    - name: RDRSS 내부 설정 및 마그넷 이력 파일 커밋 (중복 방지 핵심)
+        history_file = "RDRSSconfig/history_magnets.txt"
+        os.makedirs("RDRSSconfig", exist_ok=True)
+
+        # 1) 기존에 처리 완료된 마그넷 해시 목록 로드
+        downloaded = set()
+        if os.path.exists(history_file):
+            with open(history_file, "r", encoding="utf-8") as hf:
+                downloaded = set(line.strip().lower() for line in hf if line.strip())
+
+        # 2) 원본 RDRSS.py 소스코드를 읽어서 수집 함수 가로채기
+        with open("RDRSS.py", "r", encoding="utf-8") as f:
+            source = f.read()
+
+        # 실시간 수집된 데이터 중 기다운로드 건을 필터링하도록 원본 파일 임시 개조
+        # 'for title, magnet in magnets:' 구문 바로 밑에 필터 처리 코드 주입
+        replacement = """for title, magnet in magnets:
+            # 중복 해시 사전 필터링
+            magnet_clean = magnet.strip().lower()
+            if magnet_clean in downloaded_magnets_global:
+                print(f"[필터링] 중복 마그넷 제외 완료: {title}")
+                continue
+            downloaded_magnets_global.add(magnet_clean)
+            with open("RDRSSconfig/history_magnets.txt", "a", encoding="utf-8") as hf:
+                hf.write(magnet_clean + "\\n")"""
+
+        # 글로벌 변수로 필터 세트 할당 및 코드 변형
+        source = "downloaded_magnets_global = " + repr(downloaded) + "\n" + source
+        source = source.replace("for title, magnet in magnets:", replacement)
+
+        # 수정한 코드를 임시 저장 후 안전하게 실행
+        with open("RDRSS_patched.py", "w", encoding="utf-8") as f:
+            f.write(source)
+
+        print("=== 중복 필터링을 적용한 RDRSS 스캔을 실행합니다 ===")
+        os.system("python RDRSS_patched.py")
+        EOF
+        
+        # 빌드한 필터 구동기 실행
+        python run_filter.py
+
+    - name: 3. RDRSS 데이터 및 동기화 상태 파일 깃허브 커밋
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.email "github-actions[bot]@://github.com"
         
-        # 다운로드 완료된 마그넷 해시 목록 파일과 피드 설정 폴더를 커밋 후보에 추가합니다.
+        # 신규 캐시 및 히스토리 내역 폴더 강제 동기화 추가
         git add RDRSSconfig/
         
-        # 새로운 마그넷 다운로드 기록이 추가되었을 때만 깃허브 저장소로 푸시(기억)합니다.
         if ! git diff --staged --quiet; then
-          git commit -m "chore: Update RDRSS data and history logs [skip ci]"
+          git commit -m "chore: Synchronize RDRSS feed updates and history [skip ci]"
           git push
         fi
