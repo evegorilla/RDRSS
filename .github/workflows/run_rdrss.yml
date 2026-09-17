@@ -23,32 +23,27 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 1. RDRSS 피드 예외 패치 및 최초 설정
+    - name: 1. RDRSS 피드 연동 및 수집 가동
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
         # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상만 안전하게 한 줄 패치
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
 
-        # 토큰 세팅
+        # 토큰 등록 (매 실행마다 초기화 필수)
         python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # rdrss.json 설정 파일이 없는 최초 실행 환경일 때만 RSS 피드 등록
-        if [ ! -d "RDRSSconfig" ] || [ ! -f "RDRSSconfig/rdrss.json" ]; then
-          echo "Initial setup: adding feeds..."
-          python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
-          fi
+        # 'Missing RSS url' 에러를 막기 위해 구동할 때마다 무조건 타겟 주소들을 재주입합니다.
+        python RDRSS.py --add "https://bt4gprx.com/search?q=골%20때리는%20그녀들%20720p-NEXT&page=rss"
+        
 
-    - name: 2. RDRSS 기본 실행
-      run: |
-        # 순정 상태(날짜 예외만 처리된)로 정상 구동하여 토렌트를 수집합니다.
+        # 최종 스캔 가동 (중복 전송 유발 구간)
         python RDRSS.py
 
-    - name: 3. Real-Debrid 서버단 중복 결함 강제 청소 (사후 필터)
+    - name: 2. Real-Debrid 서버단 중복 결함 강제 청소 (안전 필터)
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # Real-Debrid API를 직접 제어하는 독립 실행기를 생성합니다.
         cat << 'EOF' > rd_cleaner.py
         import os
         import urllib.request
@@ -60,19 +55,28 @@ jobs:
             exit(0)
 
         try:
-            # 1) 현재 리얼디브리드 토렌트 다운로드 목록 호출
+            # 1) 현재 리얼디브리드 토렌트 목록 요청
             req = urllib.request.Request(
                 "https://real-debrid.com",
                 headers={"Authorization": f"Bearer {token}"}
             )
             with urllib.request.urlopen(req) as response:
-                torrents = json.loads(response.read().decode())
+                raw_data = response.read().decode().strip()
+                
+            # 데이터가 비어있거나 응답 코드가 유실되었을 때의 JSON 파싱 안전장치
+            if not raw_data:
+                print("=== 리얼디브리드 클라우드가 비어있습니다. 중복 체크를 생략합니다. ===")
+                exit(0)
+                
+            torrents = json.loads(raw_data)
+            if not isinstance(torrents, list):
+                print("불완전한 데이터 포맷 수신으로 리턴합니다.")
+                exit(0)
 
-            # 2) 파일 해시(Hash) 중복 대조 처리
+            # 2) 파일 고유 해시(Hash) 중복 분리
             seen_hashes = set()
             duplicate_ids = []
 
-            # 최신 항목이 위에 오므로, 먼저 나온 것을 유지하고 나중에 나오는 똑같은 해시는 중복 처리 대상이 됩니다.
             for t in torrents:
                 thash = t.get("hash", "").lower()
                 tid = t.get("id", "")
@@ -84,11 +88,11 @@ jobs:
                 else:
                     seen_hashes.add(thash)
 
-            # 3) 중복된 토렌트 원격 강제 삭제 실행
+            # 3) 감지된 사후 복사본들 일괄 삭제
             if duplicate_ids:
-                print(f"=== 총 {len(duplicate_ids)}개의 실시간 중복 다운로드 시도를 포착했습니다. 청소를 시작합니다. ===")
+                print(f"=== 총 {len(duplicate_ids)}개의 실시간 중복 추가 내역을 포착했습니다. 청소를 작동합니다. ===")
                 for tid, name in duplicate_ids:
-                    print(f"[중복 제거] Real-Debrid 클라우드에서 삭제 완료: {name} (ID: {tid})")
+                    print(f"[중복 제거] Real-Debrid 서버에서 제외: {name} (ID: {tid})")
                     del_req = urllib.request.Request(
                         f"https://real-debrid.com/delete/{tid}",
                         method="DELETE",
@@ -98,20 +102,20 @@ jobs:
                         with urllib.request.urlopen(del_req) as resp:
                             pass
                     except Exception as de:
-                        print(f"삭제 실패 (ID: {tid}): {de}")
+                        print(f"원격 삭제 실패 (ID: {tid}): {de}")
             else:
-                print("=== 리얼디브리드가 말끔한 상태입니다. 중복 건이 발견되지 않았습니다. ===")
+                print("=== 리얼디브리드가 안정적인 상태입니다. 중복 파일이 없습니다. ===")
 
         except Exception as e:
-            print(f"Real-Debrid API 연동 중 오류 발생: {e}")
+            print(f"Real-Debrid API 동기화 가드 작동 중 예외 포착: {e}")
         EOF
 
         python rd_cleaner.py
 
-    - name: 4. RDRSS 설정 데이터 깃허브 커밋
+    - name: 3. RDRSS 상태 보존 커밋
       run: |
         git config --global user.name "github-actions[bot]"
-        git config --global user.email "github-actions[bot]@users.noreply.github.com"
+        git config --global user.email "github-actions[bot]@://github.com"
         
         git add RDRSSconfig/
         
