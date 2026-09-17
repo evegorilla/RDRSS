@@ -34,7 +34,7 @@ jobs:
     - name: 2. 중복 등록 방지 피드 주입 및 수집 구동
       run: |
         # 들여쓰기와 백슬래시 충돌을 전면 배제한 한 줄짜리 안전 파이썬 빌더입니다.
-        python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = "https://bt4gprx.com"; os.system(f"python RDRSS.py --add \"{target}\"") if target.strip().lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 이미 등록됨: {target}"); os.system("python RDRSS.py")'
+        python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"; os.system(f"python RDRSS.py --add \"{target}\"") if target.strip().lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 이미 등록됨: {target}"); os.system("python RDRSS.py")'
 
     - name: 3. Real-Debrid 클라우드 중복 해시 전수조사 및 강제 청소
       env:
