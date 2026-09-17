@@ -30,82 +30,64 @@ jobs:
         # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상 패치
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
 
-        # 토큰 등록 및 피드 주소 등록
+        # 토큰 등록 및 초기 피드 구성 환경 마련
         if [ ! -z "$RD_SECRET_TOKEN" ]; then
           python RDRSS.py --token "$RD_SECRET_TOKEN"
         fi
 
     - name: 2. 중복 등록 방지 피드 주입 및 수집 구동
       run: |
-        # rdrss.json 파일을 직접 제어하여 중복 URL 누적을 원천 차단하는 정제 프로세스
-        python -c '
-import os, json
-config_file = "RDRSSconfig/rdrss.json"
-os.makedirs("RDRSSconfig", exist_ok=True)
-existing_urls = set()
-
-if os.path.exists(config_file):
-    try:
-        with open(config_file, "r", encoding="utf-8") as jf:
-            existing_urls = set(url.strip().lower() for url in json.load(jf).get("rssUrls", []))
-    except:
-        pass
-
-target_feed = "https://bt4gprx.com"
-if target_feed.strip().lower() not in existing_urls:
-    print(f"[피드 등록] 신규 URL 추가: {target_feed}")
-    os.system(f"python RDRSS.py --add \"{target_feed}\"")
-else:
-    print(f"[피드 패스] 이미 등록된 주소입니다: {target_feed}")
-'
-        # RDRSS 순정 엔진 수집 구동
-        python RDRSS.py
+        # 파일 쓰기 방식으로 꼬임 없는 외부 래퍼 스크립트 생성
+        echo 'import os, json' > run_rdrss_safe.py
+        echo 'config_file = "RDRSSconfig/rdrss.json"' >> run_rdrss_safe.py
+        echo 'os.makedirs("RDRSSconfig", exist_ok=True)' >> run_rdrss_safe.py
+        echo 'existing_urls = set()' >> run_rdrss_safe.py
+        echo 'if os.path.exists(config_file):' >> run_rdrss_safe.py
+        echo '    try:' >> run_rdrss_safe.py
+        echo '        with open(config_file, "r", encoding="utf-8") as jf:' >> run_rdrss_safe.py
+        echo '            existing_urls = set(url.strip().lower() for url in json.load(jf).get("rssUrls", []))' >> run_rdrss_safe.py
+        echo '    except: pass' >> run_rdrss_safe.py
+        echo 'target_feed = "https://bt4gprx.com"' >> run_rdrss_safe.py
+        echo 'if target_feed.strip().lower() not in existing_urls:' >> run_rdrss_safe.py
+        echo '    print(f"[피드 등록] 신규 URL 추가: {target_feed}")' >> run_rdrss_safe.py
+        echo '    os.system(f"python RDRSS.py --add \"{target_feed}\"")' >> run_rdrss_safe.py
+        echo 'else:' >> run_rdrss_safe.py
+        echo '    print(f"[피드 패스] 이미 등록된 주소입니다: {target_feed}")' >> run_rdrss_safe.py
+        echo 'os.system("python RDRSS.py")' >> run_rdrss_safe.py
+        
+        python run_rdrss_safe.py
 
     - name: 3. Real-Debrid 서버단 실시간 중복 결함 원격 강제 청소
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # 중복 전송된 토렌트를 리얼디브리드 서버에서 직접 조회하여 실시간 파괴
-        python -c '
-import os, urllib.request, json, urllib.error
-token = os.environ.get("RD_SECRET_TOKEN", "")
-if not token:
-    print("토큰이 없어 청소를 스킵합니다.")
-    exit(0)
-
-try:
-    req = urllib.request.Request("https://real-debrid.com", headers={"Authorization": f"Bearer {token}"})
-    with urllib.request.urlopen(req) as resp:
-        raw = resp.read().decode().strip()
-    
-    if not raw or raw.startswith("<!DOCTYPE") or "<html" in raw:
-        print("[🚨 인증 알림] 응답이 올바르지 않습니다. 토큰이 비었거나 만료되었는지 확인하세요.")
-        exit(0)
-
-    torrents = json.loads(raw)
-    seen, dup_ids = set(), []
-    for t in torrents:
-        thash = t.get("hash", "").lower()
-        tid = t.get("id", "")
-        if thash and tid:
-            if thash in seen:
-                dup_ids.append((tid, t.get("filename", "Unknown")))
-            else:
-                seen.add(thash)
-
-    if dup_ids:
-        print(f"=== {len(dup_ids)}개의 중복 내역을 포착했습니다. 청소를 시작합니다. ===")
-        for tid, name in dup_ids:
-            print(f"[중복 제거] Real-Debrid 원격 취소: {name}")
-            d_req = urllib.request.Request(f"https://real-debrid.com/delete/{tid}", method="DELETE", headers={"Authorization": f"Bearer {token}"})
-            try:
-                with urllib.request.urlopen(d_req) as d_resp: pass
-            except: pass
-    else:
-        print("=== 중복 파일이 없는 말끔한 상태입니다. ===")
-except Exception as e:
-    print(f"가드 시스템 예외 처리: {e}")
-'
+        # 중복 전송된 토렌트를 파괴하는 독립 실행형 청소기 파일 빌드 (안전한 정식 API 주소 매핑)
+        echo 'import os, urllib.request, json' > rd_cleaner.py
+        echo 'token = os.environ.get("RD_SECRET_TOKEN", "")' >> rd_cleaner.py
+        echo 'if token:' >> rd_cleaner.py
+        echo '    try:' >> rd_cleaner.py
+        echo '        req = urllib.request.Request("https://real-debrid.com", headers={"Authorization": f"Bearer {token}"})' >> rd_cleaner.py
+        echo '        with urllib.request.urlopen(req) as resp: raw = resp.read().decode().strip()' >> rd_cleaner.py
+        echo '        if raw and not raw.startswith("<!DOCTYPE") and "<html" not in raw:' >> rd_cleaner.py
+        echo '            torrents = json.loads(raw)' >> rd_cleaner.py
+        echo '            seen, dup_ids = set(), []' >> rd_cleaner.py
+        echo '            for t in torrents:' >> rd_cleaner.py
+        echo '                thash, tid = t.get("hash", "").lower(), t.get("id", "")' >> rd_cleaner.py
+        echo '                if thash and tid:' >> rd_cleaner.py
+        echo '                    if thash in seen: dup_ids.append((tid, t.get("filename", "Unknown")))' >> rd_cleaner.py
+        echo '                    else: seen.add(thash)' >> rd_cleaner.py
+        echo '            if dup_ids:' >> rd_cleaner.py
+        echo '                print(f"=== {len(dup_ids)}개의 중복 내역 포착 ===")' >> rd_cleaner.py
+        echo '                for tid, name in dup_ids:' >> rd_cleaner.py
+        echo '                    print(f"[중복 제거] 원격 삭제: {name}")' >> rd_cleaner.py
+        echo '                    d_req = urllib.request.Request(f"https://real-debrid.com/delete/{tid}", method="DELETE", headers={"Authorization": f"Bearer {token}"})' >> rd_cleaner.py
+        echo '                    try:' >> rd_cleaner.py
+        echo '                        with urllib.request.urlopen(d_req) as d_resp: pass' >> rd_cleaner.py
+        echo '                    except: pass' >> rd_cleaner.py
+        echo '            else: print("=== 중복 파일이 없는 말끔한 상태입니다. ===")' >> rd_cleaner.py
+        echo '    except Exception as e: print(f"오류: {e}")' >> rd_cleaner.py
+        
+        python rd_cleaner.py
 
     - name: 4. RDRSS 상태 보존 커밋
       run: |
