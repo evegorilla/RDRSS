@@ -2,7 +2,7 @@ name: Run RDRSS Script
 
 on:
   schedule:
-    - cron: '*/15 * * * *'
+    - cron: '*/20 * * * *'
   workflow_dispatch: # 수동 실행 버튼
 
 # 저장소에 상태 파일을 다시 푸시(Push)할 수 있도록 쓰기 권한을 부여합니다.
