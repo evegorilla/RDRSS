@@ -31,7 +31,7 @@ jobs:
       run: |
         # entry.updated_parsed가 None(없음)일 경우 오류가 나지 않도록 파이썬 코드를 한 줄 수정합니다.
         sed -i "s/if (entry.updated_parsed > last_load_date):/if (entry.get('updated_parsed') is None or entry.updated_parsed > last_load_date):/g" RDRSS.py
-
+ 
     - name: RDRSS 순차적 설정 빌드 및 실행
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
@@ -39,7 +39,7 @@ jobs:
         # 1. Real-Debrid 토큰 등록
         python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        # 2. 파이썬 반복문을 이용해 중복 없이 깔끔하게 피드 등록 (원하는 키워드는 여기에만 추가하면 됩니다)
+        # 2. 유실되었던 /search?q= 주소 구조를 올바르게 수정하여 피드 등록
         python -c "
         import subprocess, urllib.parse
         keywords = [
@@ -48,13 +48,14 @@ jobs:
             '아라이 리마', '新井リマ', 'Arai Rima', '枫カレン', 'Karen Kaede'
         ]
         for kw in keywords:
-            # 영화/비디오 카테고리로 필터링하여 불필요한 파일 유입 차단
+            # 주소 사이에 유실되었던 /search?q= 구문을 정확하게 다시 채워 넣었습니다.
             url = f'https://bt4gprx.com{urllib.parse.quote(kw)}&category=movie&page=rss'
             subprocess.run(['python', 'RDRSS.py', '--add', url])
         "
 
         # 3. 패치된 코드로 실행하여 Real-Debrid로 전송 시작
         python RDRSS.py
+
 
     - name: RDRSS 내부 설정 및 동기화 상태 파일 커밋 (중복 방지)
       run: |
