@@ -23,105 +23,100 @@ jobs:
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
 
-    - name: 중복 차단 및 안전한 RDRSS 스캔 실행
+    - name: 1. RDRSS 피드 예외 패치 및 최초 설정
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        cat << 'EOF' > run_filter.py
-        import os
-        import sys
-        import json
-        import re
+        # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상만 안전하게 한 줄 패치
+        sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
 
-        history_file = "RDRSSconfig/history_magnets.txt"
-        config_file = "RDRSSconfig/rdrss.json"
-        os.makedirs("RDRSSconfig", exist_ok=True)
-
-        # 1. Real-Debrid 토큰 초기화 등록
-        token = os.environ.get("RD_SECRET_TOKEN", "")
-        if token:
-            os.system(f'python RDRSS.py --token "{token}"')
-
-        # 2. rdrss.json 내부의 기존 등록 URL 목록 파싱 (중복 방지)
-        existing_urls = set()
-        if os.path.exists(config_file):
-            try:
-                with open(config_file, "r", encoding="utf-8") as jf:
-                    config_data = json.load(jf)
-                    urls_list = config_data.get("rssUrls", [])
-                    existing_urls = set(url.strip().lower() for url in urls_list)
-            except Exception as e:
-                print(f"[경고] rdrss.json 읽기 실패: {e}")
-
-        # 3. 추가 타겟 피드 리스트
-        target_feeds = [
-            "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
-        ]
-
-        # 없는 URL만 골라 추가 진행
-        for url in target_feeds:
-            if url.strip().lower() not in existing_urls:
-                print(f"[피드 등록] 신규 URL 추가 실행: {url}")
-                os.system(f'python RDRSS.py --add "{url}"')
-
-        # 4. 다운로드 완료된 마그넷 세트 불러오기
-        downloaded = set()
-        if os.path.exists(history_file):
-            with open(history_file, "r", encoding="utf-8") as hf:
-                downloaded = set(line.strip().lower() for line in hf if line.strip())
-
-        # 5. RDRSS.py 핵심 로직 변조 소스 빌드
-        with open("RDRSS.py", "r", encoding="utf-8") as f:
-            source = f.read()
-
-        # [패치 1] BT4G 특유의 날짜 없음(TypeError) 유연한 정규식 대책 마련
-        source = re.sub(
-            r"if\s*\(?entry\.updated_parsed\s*>\s*last_load_date\)?\s*:",
-            "if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):",
-            source
-        )
-
-        # [패치 2] 마그넷 수집 반복문 강제 가로채기 (공백/괄호 무관 정규식 매칭)
-        replacement_code = """for title, magnet in magnets:
-            magnet_clean = magnet.strip().lower()
-            if magnet_clean in downloaded_magnets_global:
-                print(f"[필터링 완료] 무한 중복 스킵: {title}")
-                continue
-            downloaded_magnets_global.add(magnet_clean)
-            with open("RDRSSconfig/history_magnets.txt", "a", encoding="utf-8") as hf:
-                hf.write(magnet_clean + "\\n")"""
-
-        # 공백 분산 형태(for title, magnet in magnets:) 전체 대응 타겟팅
-        pattern = r"for\s+title\s*,\s*magnet\s+in\s+magnets\s*:"
-        if re.search(pattern, source):
-            source = re.sub(pattern, replacement_code, source)
-            print("[성공] 마그넷 중복 차단 필터를 소스코드에 주입했습니다.")
-        else:
-            print("[오류] 소스코드에서 마그넷 반복문(for title, magnet in magnets:)을 찾지 못했습니다.", file=sys.stderr)
-            sys.exit(1)
-
-        source = "downloaded_magnets_global = " + repr(downloaded) + "\n" + source
-
-        with open("RDRSS_patched.py", "w", encoding="utf-8") as f:
-            f.write(source)
-
-        print("=== 중복 필터링 통합 패치 RDRSS 구동 시작 ===")
-        exit_code = os.system("python RDRSS_patched.py")
-        if exit_code != 0:
-            sys.exit(exit_code)
-        EOF
+        # 토큰 세팅
+        python RDRSS.py --token "$RD_SECRET_TOKEN"
         
-        python run_filter.py
+        # rdrss.json 설정 파일이 없는 최초 실행 환경일 때만 RSS 피드 등록
+        if [ ! -d "RDRSSconfig" ] || [ ! -f "RDRSSconfig/rdrss.json" ]; then
+          echo "Initial setup: adding feeds..."
+          python RDRSS.py --add "https://bt4gprx.com/search?q=h264-f1rst%20%EB%95%8C%EB%A6%AC%EB%8A%94&page=rss"
+          
+        fi
 
-    - name: 3. RDRSS 설정 데이터 및 마그넷 이력 파일 깃허브 커밋
+    - name: 2. RDRSS 기본 실행
+      run: |
+        # 순정 상태(날짜 예외만 처리된)로 정상 구동하여 토렌트를 수집합니다.
+        python RDRSS.py
+
+    - name: 3. Real-Debrid 서버단 중복 결함 강제 청소 (사후 필터)
+      env:
+        RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+      run: |
+        # Real-Debrid API를 직접 제어하는 독립 실행기를 생성합니다.
+        cat << 'EOF' > rd_cleaner.py
+        import os
+        import urllib.request
+        import json
+
+        token = os.environ.get("RD_SECRET_TOKEN", "")
+        if not token:
+            print("토큰이 없어 사후 청소를 스킵합니다.")
+            exit(0)
+
+        try:
+            # 1) 현재 리얼디브리드 토렌트 다운로드 목록 호출
+            req = urllib.request.Request(
+                "https://real-debrid.com",
+                headers={"Authorization": f"Bearer {token}"}
+            )
+            with urllib.request.urlopen(req) as response:
+                torrents = json.loads(response.read().decode())
+
+            # 2) 파일 해시(Hash) 중복 대조 처리
+            seen_hashes = set()
+            duplicate_ids = []
+
+            # 최신 항목이 위에 오므로, 먼저 나온 것을 유지하고 나중에 나오는 똑같은 해시는 중복 처리 대상이 됩니다.
+            for t in torrents:
+                thash = t.get("hash", "").lower()
+                tid = t.get("id", "")
+                if not thash or not tid:
+                    continue
+                
+                if thash in seen_hashes:
+                    duplicate_ids.append((tid, t.get("filename", "Unknown")))
+                else:
+                    seen_hashes.add(thash)
+
+            # 3) 중복된 토렌트 원격 강제 삭제 실행
+            if duplicate_ids:
+                print(f"=== 총 {len(duplicate_ids)}개의 실시간 중복 다운로드 시도를 포착했습니다. 청소를 시작합니다. ===")
+                for tid, name in duplicate_ids:
+                    print(f"[중복 제거] Real-Debrid 클라우드에서 삭제 완료: {name} (ID: {tid})")
+                    del_req = urllib.request.Request(
+                        f"https://real-debrid.com/delete/{tid}",
+                        method="DELETE",
+                        headers={"Authorization": f"Bearer {token}"}
+                    )
+                    try:
+                        with urllib.request.urlopen(del_req) as resp:
+                            pass
+                    except Exception as de:
+                        print(f"삭제 실패 (ID: {tid}): {de}")
+            else:
+                print("=== 리얼디브리드가 말끔한 상태입니다. 중복 건이 발견되지 않았습니다. ===")
+
+        except Exception as e:
+            print(f"Real-Debrid API 연동 중 오류 발생: {e}")
+        EOF
+
+        python rd_cleaner.py
+
+    - name: 4. RDRSS 설정 데이터 깃허브 커밋
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@users.noreply.github.com"
         
-        # 새로 추적되거나 변경된 RDRSSconfig 하위 폴더의 모든 데이터를 추가
         git add RDRSSconfig/
         
         if ! git diff --staged --quiet; then
-          git commit -m "chore: Synchronize configuration and magnet history logs [skip ci]"
+          git commit -m "chore: Synchronize configuration [skip ci]"
           git push
         fi
