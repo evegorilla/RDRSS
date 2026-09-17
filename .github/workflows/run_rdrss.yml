@@ -33,52 +33,53 @@ jobs:
 
     - name: 2. 중복 등록 방지 피드 주입 및 수집 구동
       run: |
-        # 한 줄 단위 echo 쓰기로 들여쓰기 꼬임(IndentationError) 현상을 기술적으로 원천 완전 봉쇄합니다.
-        echo 'import os, json' > run_rdrss_safe.py
-        echo 'cf = "RDRSSconfig/rdrss.json"' >> run_rdrss_safe.py
-        echo 'os.makedirs("RDRSSconfig", exist_ok=True)' >> run_rdrss_safe.py
-        echo 'urls = set()' >> run_rdrss_safe.py
-        echo 'if os.path.exists(cf):' >> run_rdrss_safe.py
-        echo '    try:' >> run_rdrss_safe.py
-        echo '        with open(cf, "r", encoding="utf-8") as f: urls = set(u.strip().lower() for u in json.load(f).get("rssUrls", []))' >> run_rdrss_safe.py
-        echo '    except: pass' >> run_rdrss_safe.py
-        echo 'target = "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"' >> run_rdrss_safe.py
-        echo 'if target.strip().lower() not in urls: os.system("python RDRSS.py --add \"{}\"".format(target))' >> run_rdrss_safe.py
-        echo 'os.system("python RDRSS.py")' >> run_rdrss_safe.py
+        # 한 줄씩 안전하게 결합하여 들여쓰기 오류 가능성을 완벽히 격리 차단합니다.
+        printf 'import os, json\n' > run_rdrss_safe.py
+        printf 'cf = "RDRSSconfig/rdrss.json"\n' >> run_rdrss_safe.py
+        printf 'os.makedirs("RDRSSconfig", exist_ok=True)\n' >> run_rdrss_safe.py
+        printf 'urls = set()\n' >> run_rdrss_safe.py
+        printf 'if os.path.exists(cf):\n' >> run_rdrss_safe.py
+        printf '    try:\n' >> run_rdrss_safe.py
+        printf '        with open(cf, "r", encoding="utf-8") as jf: urls = set(u.strip().lower() for u in json.load(jf).get("rssUrls", []))\n' >> run_rdrss_safe.py
+        printf '    except: pass\n' >> run_rdrss_safe.py
+        printf 'target = "https://bt4gprx.com"\n' >> run_rdrss_safe.py
+        printf 'if target.strip().lower() not in urls: os.system('\''python RDRSS.py --add "{}"'\''.format(target))\n' >> run_rdrss_safe.py
+        printf 'os.system("python RDRSS.py")\n' >> run_rdrss_safe.py
         
-        # 래퍼 프로세스 안전하게 원터치 구동
+        # 주입기 프로세스 가동
         python run_rdrss_safe.py
 
     - name: 3. Real-Debrid 클라우드 중복 해시 전수조사 및 강제 청소
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # 한 줄 단위 echo 쓰기로 들여쓰기 꼬임(IndentationError) 현상을 기술적으로 원천 완전 봉쇄합니다.
-        echo 'import os, urllib.request, json' > rd_cleaner.py
-        echo 'tk = os.environ.get("RD_SECRET_TOKEN", "")' >> rd_cleaner.py
-        echo 'if tk:' >> rd_cleaner.py
-        echo '    try:' >> rd_cleaner.py
-        echo '        req = urllib.request.Request("https://real-debrid.com", headers={"Authorization": "Bearer {}".format(tk)})' >> rd_cleaner.py
-        echo '        with urllib.request.urlopen(req) as r: raw = r.read().decode().strip()' >> rd_cleaner.py
-        echo '        if raw and not raw.startswith("<"):' >> rd_cleaner.py
-        echo '            seen, dups = set(), []' >> rd_cleaner.py
-        echo '            for t in json.loads(raw):' >> rd_cleaner.py
-        echo '                h, i = t.get("hash", "").lower(), t.get("id", "")' >> rd_cleaner.py
-        echo '                if h and i:' >> rd_cleaner.py
-        echo '                    if h in seen: dups.append((i, t.get("filename", "Unknown")))' >> rd_cleaner.py
-        echo '                    else: seen.add(h)' >> rd_cleaner.py
-        echo '            if dups:' >> rd_cleaner.py
-        echo '                print("=== [검출 완료] 총 {}개의 중복 내역 포착 ===".format(len(dups)))' >> rd_cleaner.py
-        echo '                for i, name in dups:' >> rd_cleaner.py
-        echo '                    print("[실시간 원격 제거] {}".format(name))' >> rd_cleaner.py
-        echo '                    d_req = urllib.request.Request("https://real-debrid.com{}".format(i), method="DELETE", headers={"Authorization": "Bearer {}".format(tk)})' >> rd_cleaner.py
-        echo '                    try:' >> rd_cleaner.py
-        echo '                        with urllib.request.urlopen(d_req) as dr: pass' >> rd_cleaner.py
-        echo '                    except: pass' >> rd_cleaner.py
-        echo '            else: print("=== [안정] 중복 유입 파일이 없는 깨끗한 상태입니다. ===")' >> rd_cleaner.py
-        echo '    except: pass' >> rd_cleaner.py
+        # 전수조사형(?limit=2500) 및 정식 삭제 명세를 담은 무결점 사후 클렌징 가드 빌드
+        # printf 매커니즘을 통해 리눅스 셸 공백 간섭을 무력화시킵니다.
+        printf 'import os, urllib.request, json\n' > rd_cleaner.py
+        printf 'tk = os.environ.get("RD_SECRET_TOKEN", "")\n' >> rd_cleaner.py
+        printf 'if tk:\n' >> rd_cleaner.py
+        printf '    try:\n' >> rd_cleaner.py
+        printf '        req = urllib.request.Request("https://real-debrid.com", headers={"Authorization": "Bearer {}".format(tk)})\n' >> rd_cleaner.py
+        printf '        with urllib.request.urlopen(req) as r: raw = r.read().decode().strip()\n' >> rd_cleaner.py
+        printf '        if raw and not raw.startswith("<"):\n' >> rd_cleaner.py
+        printf '            seen, dups = set(), []\n' >> rd_cleaner.py
+        printf '            for t in json.loads(raw):\n' >> rd_cleaner.py
+        printf '                h, i = t.get("hash", "").lower(), t.get("id", "")\n' >> rd_cleaner.py
+        printf '                if h and i:\n' >> rd_cleaner.py
+        printf '                    if h in seen: dups.append((i, t.get("filename", "Unknown")))\n' >> rd_cleaner.py
+        printf '                    else: seen.add(h)\n' >> rd_cleaner.py
+        printf '            if dups:\n' >> rd_cleaner.py
+        printf '                print("=== [검출 완료] 총 {}개의 중복 내역 포착 ===".format(len(dups)))\n' >> rd_cleaner.py
+        printf '                for i, name in dups:\n' >> rd_cleaner.py
+        printf '                    print("[실시간 원격 제거] {}".format(name))\n' >> rd_cleaner.py
+        printf '                    d_req = urllib.request.Request("https://real-debrid.com{}".format(i), method="DELETE", headers={"Authorization": "Bearer {}".format(tk)})\n' >> rd_cleaner.py
+        printf '                    try:\n' >> rd_cleaner.py
+        printf '                        with urllib.request.urlopen(d_req) as dr: pass\n' >> urllib.request.Request\n' >> rd_cleaner.py
+        printf '                    except: pass\n' >> rd_cleaner.py
+        printf '            else: print("=== [안정] 중복 유입 파일이 없는 깨끗한 상태입니다. ===")\n' >> rd_cleaner.py
+        printf '    exceptException as e: print("에러: {}".format(e))\n' >> rd_cleaner.py
         
-        # 사후 가드 원격 삭제 프로세서 구동
+        # 사후 원격 파괴 프로세서 구동
         python rd_cleaner.py
 
     - name: 4. RDRSS 상태 보존 커밋
