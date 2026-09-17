@@ -1,4 +1,4 @@
-name: Run RDRSS Script
+name: Run RDRSS Script Test
 
 on:
   schedule:
