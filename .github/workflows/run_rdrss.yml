@@ -32,31 +32,32 @@ jobs:
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
         if [ ! -z "$REAL_DEBRID_TOKEN" ]; then python RDRSS.py --token "$REAL_DEBRID_TOKEN"; fi
 
-    - name: 2. 마그넷 전송 함수 직전 실시간 사전 필터링 모듈 주입
-      env:
-        REAL_DEBRID_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+    - name: 2. 마그넷 전송 함수 직전 [파일 기반 실시간 사전 필터링] 주입
       run: |
         # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 아키텍처입니다.
-        # def add_magnet 진입 지점에 실시간 서버 해시 대조 가드(줄바꿈을 \n 문자열로 압축)를 오차 없이 하드코딩 주입합니다.
-        python -c 'import os, json, urllib.request; tk = os.environ.get("REAL_DEBRID_TOKEN", "").replace("\"", "").replace("\x27", "").strip(); (lambda: [None for _ in [None] if (req := urllib.request.Request("https://real-debrid.com", headers={"Authorization": f"Bearer {tk}", "User-Agent": "Mozilla/5.0"})) and (raw := urllib.request.urlopen(req).read().decode("utf-8").strip()) and (rd_hashes := [str(t.get("hash")).lower().strip() for t in json.loads(raw) if t.get("hash")] if not raw.startswith("<") else []) and (code := open("RDRSS.py", "r", encoding="utf-8").read()) and (patch := f"def add_magnet(self, magnet_info):\n        import sys\n        if str(magnet_info.get(\x27hash\x27, \x27\x27)).lower().strip() in {json.dumps(rd_hashes)}:\n            print(f\x27[🛑 사전 차단 완성] 이미 리얼디브리드에 존재하는 마그넷 해시입니다 전송을 철회합니다: {{magnet_info.get(\x27filename\x27, \x27Unknown\x27)}}\x27)\n            return True") and (open("RDRSS.py", "w", encoding="utf-8").write(code.replace("def add_magnet(self, magnet_info):", patch)) if "def add_magnet" in code else print("[에러] 전송 함수 누락")) and print(f"[성공] 마그넷 전송 직전 사전 차단 필터 주입 완료 (대조 테이블: {len(rd_hashes)}개)")])() if tk else print("[경고] 토큰 유실로 무비 패스합니다.")'
+        # RDRSSconfig/sent_magnets.txt 파일을 기반으로 대조하며, 전송 성공 시 이 파일에 실시간 누적 저장하도록 RDRSS.py 내부를 개조합니다.
+        python -c 'import os; mf = "RDRSSconfig/sent_magnets.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; code = open("RDRSS.py", "r", encoding="utf-8").read(); patch = f"def add_magnet(self, magnet_info):\n        import os\n        mf = \x27RDRSSconfig/sent_magnets.txt\x27\n        m_hash = str(magnet_info.get(\x27hash\x27, \x27\x27)).lower().strip()\n        sent_hashes = set(line.strip().lower() for line in open(mf, \x27r\x27, encoding=\x27utf-8\x27).readlines() if line.strip())\n        if m_hash in sent_hashes:\n            print(f\x27[🛑 파일 기반 사전 차단] 이미 과거에 전송했던 마그넷 해시입니다 전송 취소: {{magnet_info.get(\x27filename\x27, \x27Unknown\x27)}}\x27)\n            return True\n        with open(mf, \x27a\x27, encoding=\x27utf-8\x27) as f: f.write(m_hash + \x27\\n\x27)"; (open("RDRSS.py", "w", encoding="utf-8").write(code.replace("def add_magnet(self, magnet_info):", patch)) if "def add_magnet" in code else print("[에러] 함수 누락")) and print("[성공] 로컬 파일 기반 실시간 인터셉터 가드 주입 완료!")'
 
     - name: 3. 피드 주입 및 수집 가동
       env:
         # =================================================================
         # ⭐ [여기에 원하는 피드 URL 주소를 입력하세요] ⭐
         # =================================================================
-        TARGET_FEED_URL: "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+        TARGET_FEED_URL: "https://bt4gprx.com"
         # =================================================================
       run: |
-        # 사전 차단 구조로 완벽 개조된 RDRSS 엔진을 구동합니다. 들여쓰기 꼬임 유발 요인이 존재하지 않습니다.
+        # 파일 기반 차단 구조로 완벽 개조된 RDRSS 엔진을 가동합니다. 들여쓰기 꼬임 요인이 존재하지 않습니다.
         python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = os.environ.get("TARGET_FEED_URL", "").strip(); os.system(f"python RDRSS.py --add \"{target}\"") if target.lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 피드 주소 이미 등록됨: {target}"); os.system("python RDRSS.py")'
 
-    - name: 4. RDRSS 상태 보존 커밋
+    - name: 4. RDRSS 상태 및 마그넷 이력 보존 커밋
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
+        
+        # 설정 파일 및 마그넷 전송 기록 파일을 통째로 스테이징합니다.
         git add RDRSSconfig/
+        
         if ! git diff --staged --quiet; then
-          git commit -m "chore: Synchronize configuration [skip ci]"
+          git commit -m "chore: Update rdrss config and sent magnets log [skip ci]"
           git push
         fi
