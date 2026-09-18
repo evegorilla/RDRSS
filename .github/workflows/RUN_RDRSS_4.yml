@@ -2,7 +2,8 @@ name: Run RDRSS Script 4
 
 on:
   schedule:
-    - cron: '*/20 * * * *'
+    - cron: '11 * * * *'
+    - cron: '41 * * * *'
   workflow_dispatch: # 수동 실행 버튼
 
 jobs:
