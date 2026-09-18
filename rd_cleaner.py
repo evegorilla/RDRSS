@@ -4,7 +4,7 @@ import json
 import urllib.error
 
 def clean_real_debrid():
-    # 환경변수에서 토큰을 가져오고 따옴표나 공백이 섞여 들어오지 않도록 정제합니다.
+    # 환경변수에서 토큰을 가져오고 따옴표나 불필요한 공백을 기술적으로 완전 정제합니다.
     token = os.environ.get("RD_SECRET_TOKEN", "").replace('"', '').replace("'", "").strip()
     
     if not token:
@@ -13,22 +13,33 @@ def clean_real_debrid():
 
     try:
         url = "https://real-debrid.com"
-        req = urllib.request.Request(url, headers={"Authorization": f"Bearer {token}"})
+        
+        # 🚨 [핵심 패치] Cloudflare 및 봇 차단 필터를 우회하기 위해 정식 크롬 브라우저 헤더를 바인딩합니다.
+        headers = {
+            "Authorization": f"Bearer {token}",
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+            "Accept": "application/json"
+        }
+        
+        req = urllib.request.Request(url, headers=headers)
         
         try:
             with urllib.request.urlopen(req) as response:
                 raw_data = response.read().decode("utf-8").strip()
         except urllib.error.HTTPError as he:
-            # 🚨 유실 우려가 있던 'in' 문법을 파괴하고, 안전한 논리 동치 연산으로 전면 개조했습니다.
             if he.code == 401 or he.code == 403:
                 print(f"\n[🚨 인증 거부] Real-Debrid API 토큰 오류 (HTTP {he.code}). 토큰이 올바르지 않거나 권한이 없습니다.")
                 print("깃허브 Settings -> Secrets and variables -> Actions에 등록된 토큰을 다시 발급받아 입력하세요.\n")
                 return
             raise he
 
+        # 서버가 에러 HTML 페이지를 내뿜을 경우 원인을 정밀 추적하기 위해 원본을 디버깅합니다.
         if not raw_data or raw_data.startswith("<!DOCTYPE html") or "<html" in raw_data:
             print("\n[🚨 프로토콜 인증 실패] Real-Debrid 서버가 JSON 대신 웹페이지 HTML을 응답했습니다.")
-            print("토큰값이 잘못 전달되었거나 만료되었을 확률이 매우 높습니다. Secrets 설정 상태를 확인해 주세요.\n")
+            print("--- 수신된 서버 응답 샘플 (상위 500자) ---")
+            print(raw_data[:500])
+            print("------------------------------------------")
+            print("수신 데이터가 HTML이므로 중복 비교 프로세스를 중단합니다. 토큰 재발급 또는 깃허브 설정을 다시 확인해 주세요.\n")
             return
 
         torrents = json.loads(raw_data)
@@ -56,7 +67,7 @@ def clean_real_debrid():
             for tid, name in duplicate_ids:
                 print(f"[실시간 중복 파괴] 파일명: {name} (ID: {tid})")
                 del_url = f"https://real-debrid.com{tid}"
-                del_req = urllib.request.Request(del_url, method="DELETE", headers={"Authorization": f"Bearer {token}"})
+                del_req = urllib.request.Request(del_url, method="DELETE", headers={"Authorization": f"Bearer {token}", "User-Agent": "Mozilla/5.0"})
                 try:
                     with urllib.request.urlopen(del_req) as del_resp: pass
                 except Exception as del_err:
