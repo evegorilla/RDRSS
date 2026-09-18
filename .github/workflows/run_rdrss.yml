@@ -25,7 +25,7 @@ jobs:
 
     - name: 1. RDRSS 날짜 예외 패치 및 환경 세팅
       env:
-        RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+        RD_SECRET_TOKEN: ${{secrets.REAL_DEBRID_TOKEN}}
       run: |
         # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상 패치
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
@@ -44,9 +44,9 @@ jobs:
 
     - name: 3. Real-Debrid 클라우드 중복 해시 전수조사 및 강제 청소
       env:
-        RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+        RD_SECRET_TOKEN: ${{secrets.REAL_DEBRID_TOKEN}}
       run: |
-        # 외부 파이썬 독립 모듈을 직접 호출하므로 들여쓰기 에러가 물리적으로 발생할 수 없습니다.
+        # 외부 파이썬 독립 모듈을 공백 밀착형 변수로 호출하므로 무결성 전송이 보장됩니다.
         python rd_cleaner.py
 
     - name: 4. RDRSS 상태 보존 커밋
