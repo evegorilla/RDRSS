@@ -19,8 +19,8 @@ def clean_real_debrid():
             with urllib.request.urlopen(req) as response:
                 raw_data = response.read().decode("utf-8").strip()
         except urllib.error.HTTPError as he:
-            # 🚨 문법 에러가 났던 누락된 비교군 배열([401, 403])을 완벽하게 주입했습니다.
-            if he.code in:
+            # 🚨 유실 우려가 있던 'in' 문법을 파괴하고, 안전한 논리 동치 연산으로 전면 개조했습니다.
+            if he.code == 401 or he.code == 403:
                 print(f"\n[🚨 인증 거부] Real-Debrid API 토큰 오류 (HTTP {he.code}). 토큰이 올바르지 않거나 권한이 없습니다.")
                 print("깃허브 Settings -> Secrets and variables -> Actions에 등록된 토큰을 다시 발급받아 입력하세요.\n")
                 return
