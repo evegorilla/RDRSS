@@ -34,9 +34,65 @@ jobs:
 
     - name: 2. 마그넷 원시 주소 강제 추적 기록 및 사전 차단 가드 이식
       run: |
-        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 아키텍처입니다.
-        # RDRSS.py 하단에 파일 기반 인터셉터를 직접 결합하여 리얼디브리드로 발송되는 모든 마그넷 주소를 100% 강제 포착 및 파일 기록합니다.
-        python -c 'import os; mf = "RDRSSconfig/sent_magnets.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; code = open("RDRSS.py", "r", encoding="utf-8").read(); injector = f"\n\n# === 마그넷 강제 기록 및 중복 제거 가드 주입 ===\nimport urllib.request, json\ndef guard_add_magnet_interceptor(self, magnet_info):\n    mf_path = \x27{mf}\x27\n    m_url = str(magnet_info.get(\x27magnet\x27, \x27\x27)).strip()\n    if not m_url: m_url = f\x27magnet:?xt=urn:btih:{{magnet_info.get(\x27hash\x27, \x27\x27)}}\x27\n    sent_urls = set(line.strip() for line in open(mf_path, \x27r\x27, encoding=\x27utf-8\x27).readlines() if line.strip())\n    if m_url in sent_urls:\n        print(f\x27[🛑 전체 주소 사전 차단] 과거 전송했던 마그넷 주소이므로 스킵합니다: {{magnet_info.get(\x27filename\x27, \x27Unknown\x27)}}\x27)\n        return True\n    with open(mf_path, \x27a\x27, encoding=\x27utf-8\x27) as f_out: f_out.write(m_url + \x27\\n\x27)\n    print(f\x27[💾 마그넷 주소 강제 기록 완료] {{magnet_info.get(\x27filename\x27, \x27Unknown\x27)}}\x27)\n    try: return self._old_add_magnet(magnet_info)\n    except: return getattr(self, \x27_old_add_magnet\x27, lambda x: True)(magnet_info)\n\nfor cls_name in [\x27RealDebrid\x27, \x27RD\x27, \x27RealDebridAPI\x27, \x27RDRSS\x27]:\n    if cls_name in globals():\n        cls = globals()[cls_name]\n        for func_name in [\x27add_magnet\x27, \x27addMagnet\x27, \x27download_magnet\x27, \x27add_torrent\x27]:\n            if hasattr(cls, func_name):\n                cls._old_add_magnet = getattr(cls, func_name)\n                setattr(cls, func_name, guard_add_magnet_interceptor)\n                print(f\x27[성공] {{cls_name}}클래스의 {{func_name}} 전송 함수 가로채기 완료!\x27)\n"; open("RDRSS.py", "w", encoding="utf-8").write(code + injector); print("[완료] 오프라인 파일 기반 무결성 인터셉터 가드 결합 성공!")'
+        # heredoc 구조를 활용하여 따옴표나 중괄호 충돌이 전혀 없는 무결성 패치 파일을 임시 생성합니다.
+        cat << 'EOF' > patch_rdrss.py
+import os
+
+mf_dir = "RDRSSconfig"
+mf_path = "RDRSSconfig/sent_magnets.txt"
+os.makedirs(mf_dir, exist_ok=True)
+
+if not os.path.exists(mf_path):
+    open(mf_path, "a", encoding="utf-8").close()
+
+def guard_add_magnet_interceptor(self, magnet_info):
+    m_url = str(magnet_info.get("magnet", "")).strip()
+    if not m_url:
+        m_url = "magnet:?xt=urn:btih:" + str(magnet_info.get("hash", "")).strip()
+    
+    # 저장된 내역 전수조사
+    with open(mf_path, "r", encoding="utf-8") as f_in:
+        sent_urls = set(line.strip() for line in f_in.readlines() if line.strip())
+        
+    if m_url in sent_urls:
+        print("[🛑 전체 주소 사전 차단] 과거 전송했던 마그넷 주소이므로 스킵합니다: " + str(magnet_info.get("filename", "Unknown")))
+        return True
+        
+    # 무조건 강제 선행 기록 처리
+    with open(mf_path, "a", encoding="utf-8") as f_out:
+        f_out.write(m_url + "\n")
+    print("[💾 마그넷 주소 강제 기록 완료] " + str(magnet_info.get("filename", "Unknown")))
+    
+    try:
+        return self._old_add_magnet(magnet_info)
+    except:
+        return getattr(self, "_old_add_magnet", lambda x: True)(magnet_info)
+
+# 원본 RDRSS.py를 읽어와 동적으로 함수를 리바인딩하는 코드를 최하단에 주입합니다.
+with open("RDRSS.py", "r", encoding="utf-8") as f:
+    orig_code = f.read()
+
+injector = """
+
+# === 동적 인터셉터 바인딩 가드 ===
+import patch_rdrss
+for cls_name in ["RealDebrid", "RD", "RealDebridAPI", "RDRSS"]:
+    if cls_name in globals():
+        cls = globals()[cls_name]
+        for func_name in ["add_magnet", "addMagnet", "download_magnet", "add_torrent"]:
+            if hasattr(cls, func_name):
+                cls._old_add_magnet = getattr(cls, func_name)
+                setattr(cls, func_name, patch_rdrss.guard_add_magnet_interceptor)
+                print(f"[성공] {cls_name} 클래스의 {func_name} 전송 함수 실시간 가로채기 완료!")
+"""
+
+with open("RDRSS.py", "w", encoding="utf-8") as f:
+    f.write(orig_code + injector)
+
+print("[완료] 오프라인 파일 기반 무결성 인터셉터 가드 결합 성공!")
+EOF
+        # 패치 환경 구축 가동
+        python patch_rdrss.py
 
     - name: 3. 피드 주입 및 수집 가동
       env:
@@ -46,7 +102,7 @@ jobs:
         TARGET_FEED_URL: "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
         # =================================================================
       run: |
-        # 마그넷 주소 전체 기록 구조로 개조된 엔진을 가동합니다. 들여쓰기 에러 요소가 없습니다.
+        # 마그넷 주소 전체 기록 구조로 개조된 엔진을 가동합니다.
         python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = os.environ.get("TARGET_FEED_URL", "").strip(); os.system(f"python RDRSS.py --add \"{target}\"") if target.lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 피드 주소 이미 등록됨: {target}"); os.system("python RDRSS.py")'
 
     - name: 4. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
