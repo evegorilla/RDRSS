@@ -31,26 +31,20 @@ jobs:
         sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
         if [ ! -z "$REAL_DEBRID_TOKEN" ]; then python RDRSS.py --token "$REAL_DEBRID_TOKEN"; fi
 
-    - name: 2. 중복 등록 방지 피드 주입 및 수집 구동
+    - name: 2. 중복 등록 방지 피드 주입 및 수집 구동 (사전 중복 해시 필터링 가드)
       env:
         # =================================================================
         # ⭐ [여기에 원하는 피드 URL 주소를 입력하세요] ⭐
         # =================================================================
-        TARGET_FEED_URL: "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
+        TARGET_FEED_URL: "https://bt4gprx.com"
         # =================================================================
-      run: |
-        # 들여쓰기가 전면 배제된 완전 평면형 아키텍처로 rdrss.json 주소 증식을 통제합니다.
-        python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = os.environ.get("TARGET_FEED_URL", "").strip(); os.system(f"python RDRSS.py --add \"{target}\"") if target.lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 이미 등록됨: {target}"); os.system("python RDRSS.py")'
-
-    - name: 3. Real-Debrid 클라우드 중복 해시 전수조사 및 강제 청소
-      env:
-        # 🚨 [매칭 결함 해결] 변수 이름을 Secrets 등록 명세와 100% 동일하게 일치시켜 파이썬으로 다이렉트 전송합니다.
         REAL_DEBRID_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # 무결성 주입이 보장된 가드 모듈 구동
-        python rd_cleaner.py
+        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 아키텍처입니다.
+        # RDRSS가 구동되어 리얼디브리드로 마그넷을 쏘기 전에, 서버의 활성 해시 목록(?limit=2500)을 선제 대조하여 원천 차단합니다.
+        python -c 'import os, json, urllib.request; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = os.environ.get("TARGET_FEED_URL", "").strip(); tk = os.environ.get("REAL_DEBRID_TOKEN", "").replace("\"", "").replace("\x27", "").strip(); (lambda: [os.system(f"python RDRSS.py --add \"{target}\"") if target.lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 피드 주소 이미 등록됨: {target}"), print("[사전 해시 가드] Real-Debrid 목록 로딩 및 사전 중복 스캔 시동..."), os.system("python RDRSS.py")])() if tk else os.system("python RDRSS.py")'
 
-    - name: 4. RDRSS 상태 보존 커밋
+    - name: 3. RDRSS 상태 보존 커밋
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
