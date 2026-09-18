@@ -18,7 +18,7 @@ jobs:
       with:
         python-version: '3.10'
         
-    - name: 의존성 설치
+    - name: 의존성 라이브러리 설치
       run: |
         python -m pip install --upgrade pip
         if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
@@ -46,37 +46,8 @@ jobs:
       env:
         RD_SECRET_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
       run: |
-        # echo 주입 아키텍처를 결합하여 들여쓰기 에러를 완전 소멸시킨 프로페셔널 클렌저 가드 빌드
-        echo "import os, urllib.request, json" > real_debrid_cleaner.py
-        echo "tk = os.environ.get('RD_SECRET_TOKEN', '')" >> real_debrid_cleaner.py
-        echo "if tk:" >> real_debrid_cleaner.py
-        echo "    try:" >> real_debrid_cleaner.py
-        echo "        req = urllib.request.Request('https://real-debrid.com', headers={'Authorization': 'Bearer {}'.format(tk)})" >> real_debrid_cleaner.py
-        echo "        with urllib.request.urlopen(req) as r: raw = r.read().decode().strip()" >> real_debrid_cleaner.py
-        echo "        if raw and not raw.startswith('<'):" >> real_debrid_cleaner.py
-        echo "            seen_hashes = set()" >> real_debrid_cleaner.py
-        echo "            duplicate_ids = []" >> real_debrid_cleaner.py
-        echo "            for t in json.loads(raw):" >> real_debrid_cleaner.py
-        echo "                thash = t.get('hash', '').lower().strip()" >> real_debrid_cleaner.py
-        echo "                tid = t.get('id', '')" >> real_debrid_cleaner.py
-        echo "                if thash and tid:" >> real_debrid_cleaner.py
-        echo "                    if thash in seen_hashes:" >> real_debrid_cleaner.py
-        echo "                        duplicate_ids.append((tid, t.get('filename', 'Unknown')))" >> real_debrid_cleaner.py
-        echo "                    else:" >> real_debrid_cleaner.py
-        echo "                        seen_hashes.add(thash)" >> real_debrid_cleaner.py
-        echo "            if duplicate_ids:" >> real_debrid_cleaner.py
-        echo "                print('=== [중복 검출] 총 {}개의 실시간 중복 건이 적발되었습니다. ==='.format(len(duplicate_ids)))" >> real_debrid_cleaner.py
-        echo "                for tid, name in duplicate_ids:" >> real_debrid_cleaner.py
-        echo "                    print('[실시간 강제 청소] 파일명: {}'.format(name))" >> real_debrid_cleaner.py
-        echo "                    d_req = urllib.request.Request('https://real-debrid.com{}'.format(tid), method='DELETE', headers={'Authorization': 'Bearer {}'.format(tk)})" >> real_debrid_cleaner.py
-        echo "                    try:" >> real_debrid_cleaner.py
-        echo "                        with urllib.request.urlopen(d_req) as dr: pass" >> real_debrid_cleaner.py
-        echo "                    except: pass" >> real_debrid_cleaner.py
-        echo "            else: print('=== [안정] 중복 유입 파일이 없는 완벽히 깨끗한 상태입니다. ===')" >> real_debrid_cleaner.py
-        echo "    except Exception as e: print('가드 에러 발생: {}'.format(e))" >> real_debrid_cleaner.py
-
-        # 정밀 교정 완료된 청소 엔진을 구동합니다.
-        python real_debrid_cleaner.py
+        # 외부 파이썬 독립 모듈을 직접 호출하므로 들여쓰기 에러가 물리적으로 발생할 수 없습니다.
+        python rd_cleaner.py
 
     - name: 4. RDRSS 상태 보존 커밋
       run: |
