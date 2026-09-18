@@ -42,10 +42,6 @@ jobs:
           https://bt4gprx.com/search?q=韩国&category=movie&page=rss
           https://bt4gprx.com/search?q=bydda.cc&category=movie&page=rss
           https://bt4gprx.com/search?q=국산&category=movie&page=rss
-          https://bt4gprx.com/search?q=마사지&category=movie&page=rss
-          https://bt4gprx.com/search?q=신작&category=movie&page=rss
-          https://bt4gprx.com/search?q=VVIP&category=movie&page=rss
-          https://bt4gprx.com/search?q=あらいりま&category=movie&page=rss
           
         # =================================================================
       run: |
