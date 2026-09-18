@@ -1,0 +1,69 @@
+name: Run RDRSS Script 1
+
+on:
+  schedule:
+    - cron: '*/20 * * * *'
+  workflow_dispatch: # 수동 실행 버튼
+
+jobs:
+  run-script:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 저장소 코드 가져오기
+      uses: actions/checkout@v6
+
+    - name: 파이썬 설치
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+        
+    - name: 의존성 라이브러리 설치
+      run: |
+        python -m pip install --upgrade pip
+        python -m pip install feedparser
+        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+
+    - name: 1. RDRSS 날짜 예외 패치 및 환경 세팅
+      env:
+        REAL_DEBRID_TOKEN: ${{ secrets.REAL_DEBRID_TOKEN }}
+      run: |
+        # BT4G 특유의 날짜 없음(TypeError)으로 스크립트가 멈추는 현상 패치
+        sed -i "s/if (entry.updated_parsed > last_load_date):/if entry.get('updated_parsed') is None or (entry.updated_parsed > last_load_date):/g" RDRSS.py || true
+        if [ ! -z "$REAL_DEBRID_TOKEN" ]; then python RDRSS.py --token "$REAL_DEBRID_TOKEN"; fi
+
+    - name: 2. 멀티 피드 순회 주입 및 실시간 중복 마그넷 차단 구동
+      env:
+        # =================================================================
+        # ⭐ [여기에 수집하고 싶은 피드 주소들을 한 줄에 하나씩 나열하세요] ⭐
+        # 앞에 하이픈(-) 없이 정렬 칸에 맞춰 아래로 쭉 적어주시면 됩니다.
+        # =================================================================
+        MULTI_FEED_URLS: |
+          https://bt4gprx.com/search?q=마사지&category=movie&page=rss
+          https://bt4gprx.com/search?q=신작&category=movie&page=rss
+          https://bt4gprx.com/search?q=VVIP&category=movie&page=rss
+          https://bt4gprx.com/search?q=あらいりま&category=movie&page=rss     
+          
+        # =================================================================
+      run: |
+        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 멀티 가드 엔진입니다.
+        # YAML의 멀티라인 줄바꿈(\n) 데이터를 파이썬 내부에서 분리하여 한 줄씩 순차적으로 순회 처리합니다.
+        python -c 'import os, json, feedparser; cf = "RDRSSconfig/rdrss1.json"; mf = "RDRSSconfig/sent_magnets1.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; feed_raw = os.environ.get("MULTI_FEED_URLS", "").strip(); feeds = [f.strip() for f in feed_raw.split("\n") if f.strip()]; su = set(l.strip().lower() for l in open(mf, "r", encoding="utf-8").readlines() if l.strip()); print(f"[멀티 스캔] 총 {len(feeds)}개의 피드 주소를 감지했습니다. 전수 검증 기동..."); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); any_new = False; [os.system(f"python RDRSS.py --add \"{f}\"") if f.lower() not in set(u.strip().lower() for u in urls) else None for f in feeds]; 
+        for target in feeds:
+            print(f"\n[대상 피드 분석 시작] -> {target[:60]}..."); new_entries = [e for e in feedparser.parse(target).entries if str(e.link).strip().lower() not in su]; [open(mf, "a", encoding="utf-8").write(str(e.link).strip() + "\n") or print(f"[💾 신규 마그넷 주소 강제 기록 완료] {e.title}") for e in new_entries]; 
+            if new_entries: any_new = True; print(f"[🚀 신규 건 감지] 중복 제외 새 마그넷 {len(new_entries)}건 발견.")
+            else: print(f"[🛑 중복 차단] 이 피드의 모든 마그넷이 이미 과거에 전송되었습니다.")
+        os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 모든 피드에 새로운 마그넷이 존재하지 않습니다. 리얼디브리드 전송을 스킵하고 안전하게 완주합니다.")'
+
+    - name: 3. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@://github.com"
+        
+        # 주소 기록이 강제로 실시간 축적되는 설정 폴더 전체를 형상관리에 병합합니다.
+        git add RDRSSconfig/
+        
+        if ! git diff --staged --quiet; then
+          git commit -m "chore: Synchronize multi-feed configuration and save raw magnet links [skip ci]"
+          git push
+        fi
