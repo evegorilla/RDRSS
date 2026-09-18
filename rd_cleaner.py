@@ -4,14 +4,20 @@ import json
 import urllib.error
 
 def clean_real_debrid():
-    # 깃허브 액션 환경변수 매핑 불일치 문제를 해결하기 위해 유입될 수 있는 모든 Secrets 변수명을 정밀 추적합니다.
-    token = os.environ.get("REAL_DEBRID_TOKEN", "") or os.environ.get("RD_SECRET_TOKEN", "")
-    token = str(token).replace('"', '').replace("'", "").strip()
+    # 깃허브 Secrets에 잘못 유입될 수 있는 공백, 줄바꿈(\n), 큰따옴표, 작은따옴표를 완벽하게 제거하여 순수 알맹이만 추출합니다.
+    raw_token = os.environ.get("REAL_DEBRID_TOKEN", "") or os.environ.get("RD_SECRET_TOKEN", "")
+    token = str(raw_token).replace('"', '').replace("'", "").replace("\n", "").replace("\r", "").strip()
     
     if not token or token == "***":
         print("[🚨 하드웨어 오류] 깃허브 Secrets 토큰 값이 파이썬 스크립트로 전달되지 못했습니다.")
-        print("YAML 파일 내부의 env 설정을 다시 확인해야 합니다.")
         return
+
+    # 💡 [전문가 디버깅 정보 출력] 토큰의 무결성 상태를 사용자가 직접 역추적할 수 있도록 정보를 서포트합니다.
+    print(f"=== [토큰 무결성 검증 세션] ===")
+    print(f"-> 파악된 토큰 문자열 총 길이: {len(token)} 글자")
+    if len(token) > 8:
+        print(f"-> 토큰 시작 부호 대조: {token[:4]}****...****{token[-4:]}")
+    print(f"================================\n")
 
     try:
         url = "https://real-debrid.com"
@@ -30,17 +36,15 @@ def clean_real_debrid():
                 raw_data = response.read().decode("utf-8").strip()
         except urllib.error.HTTPError as he:
             if he.code in (401, 403):
-                print(f"\n[🚨 인증 거부] Real-Debrid API 토큰 거부 (HTTP {he.code}). 토큰의 문자열 알맹이가 올바르지 않습니다.")
-                print("복사할 때 앞뒤에 공백이 들어갔거나, Bearer Token이 아닌 일반 쿠키 토큰을 넣었는지 확인하세요.\n")
+                print(f"[🚨 인증 거부] Real-Debrid API 서버가 토큰 인증을 즉시 거부했습니다 (HTTP {he.code}).")
+                print("복사 오류가 발생했거나, 다른 계정의 토큰이거나, 만료된 토큰입니다. apitoken 페이지에서 다시 Generate 하여 넣으셔야 합니다.\n")
                 return
             raise he
 
         # 서버 응답 검증 구조 고도화
         if not raw_data or raw_data.startswith("<!DOCTYPE") or "<html" in raw_data:
-            print("\n[🚨 프로토콜 인증 실패] 정식 API 경로로 요청했으나, 토큰값 미치 혹은 만료로 메인 페이지 리디렉션이 터졌습니다.")
-            print("--- 수신된 서버 응답 샘플 (상위 300자) ---")
-            print(raw_data[:300])
-            print("------------------------------------------")
+            print("[🚨 프로토콜 인증 실패] 정식 API 경로로 우회 요청했으나, 토큰 문자열 유효성 결함으로 홈페이지 리디렉션이 터졌습니다.")
+            print("현재 입력된 REAL_DEBRID_TOKEN 값의 문자열 알맹이 자체에 무조건 공백이나 오타가 박혀있는 상태입니다.")
             return
 
         torrents = json.loads(raw_data)
@@ -57,7 +61,6 @@ def clean_real_debrid():
 
             clean_hash = str(raw_hash).lower().strip()
 
-            # 최신 항목(상단 배정)은 살려두고, 과거에 하단에 이미 들어와 앉아있던 중복 복사본 해시를 타겟팅합니다.
             if clean_hash in seen_hashes:
                 duplicate_ids.append((tid, filename))
             else:
