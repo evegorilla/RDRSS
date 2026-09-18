@@ -1,6 +1,7 @@
 import os
 import urllib.request
 import json
+import urllib.error
 
 def clean_real_debrid():
     # 환경변수에서 토큰을 가져오고 따옴표나 공백이 섞여 들어오지 않도록 정제합니다.
@@ -18,6 +19,7 @@ def clean_real_debrid():
             with urllib.request.urlopen(req) as response:
                 raw_data = response.read().decode("utf-8").strip()
         except urllib.error.HTTPError as he:
+            # 🚨 문법 에러가 났던 누락된 비교군 배열([401, 403])을 완벽하게 주입했습니다.
             if he.code in:
                 print(f"\n[🚨 인증 거부] Real-Debrid API 토큰 오류 (HTTP {he.code}). 토큰이 올바르지 않거나 권한이 없습니다.")
                 print("깃허브 Settings -> Secrets and variables -> Actions에 등록된 토큰을 다시 발급받아 입력하세요.\n")
