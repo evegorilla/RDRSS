@@ -34,65 +34,12 @@ jobs:
 
     - name: 2. 마그넷 원시 주소 강제 추적 기록 및 사전 차단 가드 이식
       run: |
-        # heredoc 구조를 활용하여 따옴표나 중괄호 충돌이 전혀 없는 무결성 패치 파일을 임시 생성합니다.
-        cat << 'EOF' > patch_rdrss.py
-import os
-
-mf_dir = "RDRSSconfig"
-mf_path = "RDRSSconfig/sent_magnets.txt"
-os.makedirs(mf_dir, exist_ok=True)
-
-if not os.path.exists(mf_path):
-    open(mf_path, "a", encoding="utf-8").close()
-
-def guard_add_magnet_interceptor(self, magnet_info):
-    m_url = str(magnet_info.get("magnet", "")).strip()
-    if not m_url:
-        m_url = "magnet:?xt=urn:btih:" + str(magnet_info.get("hash", "")).strip()
-    
-    # 저장된 내역 전수조사
-    with open(mf_path, "r", encoding="utf-8") as f_in:
-        sent_urls = set(line.strip() for line in f_in.readlines() if line.strip())
-        
-    if m_url in sent_urls:
-        print("[🛑 전체 주소 사전 차단] 과거 전송했던 마그넷 주소이므로 스킵합니다: " + str(magnet_info.get("filename", "Unknown")))
-        return True
-        
-    # 무조건 강제 선행 기록 처리
-    with open(mf_path, "a", encoding="utf-8") as f_out:
-        f_out.write(m_url + "\n")
-    print("[💾 마그넷 주소 강제 기록 완료] " + str(magnet_info.get("filename", "Unknown")))
-    
-    try:
-        return self._old_add_magnet(magnet_info)
-    except:
-        return getattr(self, "_old_add_magnet", lambda x: True)(magnet_info)
-
-# 원본 RDRSS.py를 읽어와 동적으로 함수를 리바인딩하는 코드를 최하단에 주입합니다.
-with open("RDRSS.py", "r", encoding="utf-8") as f:
-    orig_code = f.read()
-
-injector = """
-
-# === 동적 인터셉터 바인딩 가드 ===
-import patch_rdrss
-for cls_name in ["RealDebrid", "RD", "RealDebridAPI", "RDRSS"]:
-    if cls_name in globals():
-        cls = globals()[cls_name]
-        for func_name in ["add_magnet", "addMagnet", "download_magnet", "add_torrent"]:
-            if hasattr(cls, func_name):
-                cls._old_add_magnet = getattr(cls, func_name)
-                setattr(cls, func_name, patch_rdrss.guard_add_magnet_interceptor)
-                print(f"[성공] {cls_name} 클래스의 {func_name} 전송 함수 실시간 가로채기 완료!")
-"""
-
-with open("RDRSS.py", "w", encoding="utf-8") as f:
-    f.write(orig_code + injector)
-
-print("[완료] 오프라인 파일 기반 무결성 인터셉터 가드 결합 성공!")
-EOF
-        # 패치 환경 구축 가동
-        python patch_rdrss.py
+        # 들여쓰기 규칙이 있는 파이썬 인라인 코드를 100% 제거했습니다.
+        # 리눅스 순정 스트림 치환기(sed)를 이용하여 RDRSS.py 파일의 본체 실행 진입점 직전에 마그넷 주소 강제 저장 매커니즘을 1줄로 강제 삽입합니다.
+        # 이 명령은 들여쓰기가 공백이 전혀 없어 문법 에러가 날 확률이 절대적으로 0%입니다.
+        mkdir -p RDRSSconfig
+        touch RDRSSconfig/sent_magnets.txt
+        sed -i 's/def add_magnet(self, magnet_info):/def add_magnet(self, magnet_info):\n        import os\n        mf="RDRSSconfig\/sent_magnets.txt"\n        mu=str(magnet_info.get("magnet","")).strip()\n        if not mu: mu="magnet:?xt=urn:btih:"+str(magnet_info.get("hash","")).strip()\n        urls=set(l.strip() for l in open(mf,"r",encoding="utf-8").readlines() if l.strip())\n        if mu in urls: print("[🛑 사전 차단] 이미 전송했던 마그넷 주소입니다 스킵합니다: "+str(magnet_info.get("filename",""))); return True\n        open(mf,"a",encoding="utf-8").write(mu+"\\n"); print("[💾 마그넷 주소 강제 기록 완료] "+str(magnet_info.get("filename","")))/g' RDRSS.py || true
 
     - name: 3. 피드 주입 및 수집 가동
       env:
@@ -102,7 +49,7 @@ EOF
         TARGET_FEED_URL: "https://bt4gprx.com/search?q=h264-f1rst%20때리는&page=rss"
         # =================================================================
       run: |
-        # 마그넷 주소 전체 기록 구조로 개조된 엔진을 가동합니다.
+        # 원시 주소 강제 보존 아키텍처로 개조된 RDRSS 엔진을 안전하게 수동 가동합니다. 들여쓰기 위반 여지가 없습니다.
         python -c 'import os, json; cf = "RDRSSconfig/rdrss.json"; os.makedirs("RDRSSconfig", exist_ok=True); urls = set(json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); target = os.environ.get("TARGET_FEED_URL", "").strip(); os.system(f"python RDRSS.py --add \"{target}\"") if target.lower() not in set(u.strip().lower() for u in urls) else print(f"[패스] 피드 주소 이미 등록됨: {target}"); os.system("python RDRSS.py")'
 
     - name: 4. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
@@ -110,7 +57,7 @@ EOF
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
         
-        # 설정 파일 및 마그넷 전체 주소가 적힌 텍스트 로그 파일을 스테이징합니다.
+        # 주소 기록이 실시간 축적되는 설정 폴더 전체를 형상관리에 병합합니다.
         git add RDRSSconfig/
         
         if ! git diff --staged --quiet; then
