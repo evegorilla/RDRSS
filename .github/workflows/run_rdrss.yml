@@ -52,7 +52,6 @@ jobs:
           https://bt4gprx.com/search?q=Arai%20Rima&category=movie&page=rss
           https://bt4gprx.com/search?q=楓カレン&category=movie&page=rss
           https://bt4gprx.com/search?q=Karen%20Kaede&category=movie&page=rss
-          
         # =================================================================
       run: |
         # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 멀티 가드 엔진입니다.
