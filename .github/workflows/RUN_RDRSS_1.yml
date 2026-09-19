@@ -54,15 +54,18 @@ jobs:
             else: print(f"[🛑 중복 차단] 이 피드의 모든 마그넷이 이미 과거에 전송되었습니다.")
         os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 입력한 피드에 새로운 마그넷이 존재하지 않습니다. 작업을 안전하게 완주합니다.")'
         
-        # 주입 시 임시 생성된 rdrss.json 파일을 형상관리 커밋 대상에서 완전 영구 제외 처리합니다.
-        rm -f RDRSSconfig/rdrss.json
+        # 워크스페이스 내부의 json 파일을 완벽히 삭제하여 Git 추적을 차단합니다.
+        rm -f rdrss.json RDRSSconfig/rdrss.json RDRSSconfig/*.json *.json 2>/dev/null || true
 
     - name: 3. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
       run: |
         git config --global user.name "github-actions[bot]"
         git config --global user.email "github-actions[bot]@://github.com"
         
-        # 주소 기록이 강제로 실시간 축적되는 설정 폴더 전체를 형상관리에 병합합니다.
+        # rdrss.json 파일이 존재하더라도 커밋 대상에서 완벽히 배제하고 무조건 삭제 상태로 동기화합니다.
+        git rm -f rdrss.json RDRSSconfig/rdrss.json 2>/dev/null || true
+        
+        # 오직 마그넷 이력 파일 폴더만 형상관리에 반영합니다.
         git add RDRSSconfig/
         
         if ! git diff --staged --quiet; then
