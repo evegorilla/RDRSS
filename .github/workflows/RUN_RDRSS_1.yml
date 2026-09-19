@@ -54,6 +54,7 @@ jobs:
             else: print(f"[🛑 중복 차단] 이 피드의 모든 마그넷이 이미 과거에 전송되었습니다.")
         os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 모든 피드에 새로운 마그넷이 존재하지 않습니다. 리얼디브리드 전송을 스킵하고 안전하게 완주합니다.")'
 
+
     - name: 3. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
       run: |
         git config --global user.name "github-actions[bot]"
