@@ -1,0 +1,63 @@
+name: RDRSS History Cleaner
+
+on:
+  schedule:
+    # 매일 새벽 3시 15분(KST)에 정기적으로 이력 다이어트 구동
+    - cron: '15 18 * * *'
+  workflow_dispatch: # 수동으로 한 번에 정리하고 싶을 때 누르는 버튼
+
+jobs:
+  cleanup-history:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: 저장소 코드 가져오기
+      uses: actions/checkout@v6
+
+    - name: 파이썬 설치
+      uses: actions/setup-python@v6
+      with:
+        python-version: '3.10'
+
+    - name: sent_magnets 1~4번 파일 전수 진단 및 1000개 초과분 커트
+      run: |
+        python -c '
+        import os
+        config_dir = "RDRSSconfig"
+        if not os.path.exists(config_dir):
+            print("RDRSSconfig 폴더가 존재하지 않아 작업을 종료합니다.")
+            exit(0)
+            
+        for i in range(1, 5):
+            file_path = f"{config_dir}/sent_magnets{i}.txt"
+            if os.path.exists(file_path):
+                with open(file_path, "r", encoding="utf-8") as f:
+                    lines = f.readlines()
+                
+                total_lines = len(lines)
+                if total_lines > 1000:
+                    # 1000개를 초과한 경우 최신 1000개만 슬라이싱하여 덮어쓰기
+                    with open(file_path, "w", encoding="utf-8") as f:
+                        f.writelines(lines[-1000:])
+                    print(f"[🧹 정리 완료] sent_magnets{i}.txt : 기존 {total_lines}개 -> 최신 1000개 보존 (오래된 {total_lines - 1000}개 삭제)")
+                else:
+                    print(f"[✅ 정상 상태] sent_magnets{i}.txt : 현재 {total_lines}개 누적 중 (1000개 이하이므로 유지)")
+            else:
+                print(f"[ℹ️ 파일 없음] sent_magnets{i}.txt 파일이 아직 생성되지 않았습니다.")
+        '
+
+    - name: 3. 변동 사항 안전 보존 커밋 및 푸시
+      run: |
+        git config --global user.name "github-actions[bot]"
+        git config --global user.email "github-actions[bot]@://github.com"
+        
+        # 만약 rdrss.json 이 유입되었다면 확실히 날려서 커밋 방지
+        git rm -f rdrss.json RDRSSconfig/rdrss.json 2>/dev/null || true
+        rm -f rdrss.json RDRSSconfig/rdrss.json RDRSSconfig/*.json *.json 2>/dev/null || true
+        
+        git add RDRSSconfig/
+        
+        if ! git diff --staged --quiet; then
+          git commit -m "chore: Purge expired magnet links and optimize text storage [skip ci]"
+          git push
+        fi
