@@ -46,14 +46,13 @@ jobs:
           
         # =================================================================
       run: |
-        # JSON에 등록된 기존 피드는 스킵하고 오직 순수 신규 피드만 주입 및 작동시키는 완전 평면 스크립트입니다.
-        python -c 'import os, json, feedparser; cf = "RDRSSconfig/rdrss.json"; mf = "RDRSSconfig/sent_magnets1.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; feed_raw = os.environ.get("MULTI_FEED_URLS", "").strip(); feeds = [f.strip() for f in feed_raw.split("\n") if f.strip()]; su = set(l.strip().lower() for l in open(mf, "r", encoding="utf-8").readlines() if l.strip()); print(f"[멀티 스캔] 총 {len(feeds)}개의 피드 주소를 감지했습니다. 전수 검증 기동..."); urls = set(u.strip().lower() for u in json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); any_new = False; [os.system(f"python RDRSS.py --add \"{f}\"") if f.lower() not in urls else None for f in feeds]; 
+        # JSON 파일을 완전히 무시하고 오직 위에 입력한 피드 목록만 강제로 주입 및 실시간 스캔하는 최적화 엔진입니다.
+        python -c 'import os, json, feedparser; cf = "RDRSSconfig/rdrss.json"; mf = "RDRSSconfig/sent_magnets1.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; feed_raw = os.environ.get("MULTI_FEED_URLS", "").strip(); feeds = [f.strip() for f in feed_raw.split("\n") if f.strip()]; su = set(l.strip().lower() for l in open(mf, "r", encoding="utf-8").readlines() if l.strip()); print(f"[독립 스캔] JSON을 배제하고 오직 입력된 {len(feeds)}개의 피드만 기동합니다..."); any_new = False; [os.system(f"python RDRSS.py --add \"{f}\"") for f in feeds]; 
         for target in feeds:
-            if target.lower() in urls: print(f"[🛑 피드 스킵] 이미 JSON에 등록되어 실행하지 않습니다 -> {target[:60]}..."); continue
-            print(f"\n[🆕 신규 피드 분석 기동] -> {target[:60]}..."); new_entries = [e for e in feedparser.parse(target).entries if str(e.link).strip().lower() not in su]; [open(mf, "a", encoding="utf-8").write(str(e.link).strip() + "\n") or print(f"[💾 신규 마그넷 주소 강제 기록 완료] {e.title}") for e in new_entries]; 
+            print(f"\n[대상 피드 분석 시작] -> {target[:60]}..."); new_entries = [e for e in feedparser.parse(target).entries if str(e.link).strip().lower() not in su]; [open(mf, "a", encoding="utf-8").write(str(e.link).strip() + "\n") or print(f"[💾 신규 마그넷 주소 강제 기록 완료] {e.title}") for e in new_entries]; 
             if new_entries: any_new = True; print(f"[🚀 신규 건 감지] 중복 제외 새 마그넷 {len(new_entries)}건 발견.")
             else: print(f"[🛑 중복 차단] 이 피드의 모든 마그넷이 이미 과거에 전송되었습니다.")
-        os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 실행 대상 피드에 새로운 마그넷이 존재하지 않거나 모두 스킵되었습니다. 작업을 안전하게 완주합니다.")'
+        os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 입력한 피드에 새로운 마그넷이 존재하지 않습니다. 작업을 안전하게 완주합니다.")'
 
     - name: 3. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
       run: |
