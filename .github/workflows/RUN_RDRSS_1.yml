@@ -46,15 +46,13 @@ jobs:
           
         # =================================================================
       run: |
-        # 들여쓰기를 전면 배제한 단 한 줄짜리 완전 평면(Flat-line) 파이썬 멀티 가드 엔진입니다.
-        # YAML의 멀티라인 줄바꿈(\n) 데이터를 파이썬 내부에서 분리하여 한 줄씩 순차적으로 순회 처리합니다.
+        # JSON 중복 검사를 거쳐 피드를 등록하고, 모든 피드의 새로운 마그넷을 정상 스캔하는 엔진입니다.
         python -c 'import os, json, feedparser; cf = "RDRSSconfig/rdrss.json"; mf = "RDRSSconfig/sent_magnets1.txt"; os.makedirs("RDRSSconfig", exist_ok=True); open(mf, "a", encoding="utf-8").close() if not os.path.exists(mf) else None; feed_raw = os.environ.get("MULTI_FEED_URLS", "").strip(); feeds = [f.strip() for f in feed_raw.split("\n") if f.strip()]; su = set(l.strip().lower() for l in open(mf, "r", encoding="utf-8").readlines() if l.strip()); print(f"[멀티 스캔] 총 {len(feeds)}개의 피드 주소를 감지했습니다. 전수 검증 기동..."); urls = set(u.strip().lower() for u in json.load(open(cf, "r", encoding="utf-8")).get("rssUrls", [])) if os.path.exists(cf) else set(); any_new = False; [os.system(f"python RDRSS.py --add \"{f}\"") if f.lower() not in urls else None for f in feeds]; 
         for target in feeds:
-            if target.lower() in urls: print(f"\n[🛑 피드 스킵] 이미 JSON에 등록되어 스캔을 건너뜁니다 -> {target[:60]}..."); continue
             print(f"\n[대상 피드 분석 시작] -> {target[:60]}..."); new_entries = [e for e in feedparser.parse(target).entries if str(e.link).strip().lower() not in su]; [open(mf, "a", encoding="utf-8").write(str(e.link).strip() + "\n") or print(f"[💾 신규 마그넷 주소 강제 기록 완료] {e.title}") for e in new_entries]; 
             if new_entries: any_new = True; print(f"[🚀 신규 건 감지] 중복 제외 새 마그넷 {len(new_entries)}건 발견.")
             else: print(f"[🛑 중복 차단] 이 피드의 모든 마그넷이 이미 과거에 전송되었습니다.")
-        os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 모든 피드에 새로운 마그넷이 존재하지 않거나 스킵되었습니다. 리얼디브리드 전송을 스킵하고 안전하게 완주합니다.")'
+        os.system("python RDRSS.py") if any_new else print("\n[🏁 최종 결과] 모든 피드에 새로운 마그넷이 존재하지 않습니다. 리얼디브리드 전송을 스킵하고 안전하게 완주합니다.")'
 
     - name: 3. RDRSS 상태 및 마그넷 전체 주소 이력 보존 커밋
       run: |
